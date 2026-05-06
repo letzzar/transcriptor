@@ -1,0 +1,14 @@
+venv/
+.venv/
+build/
+dist/
+__pycache__/
+*.pyc
+*.spec
+*.exe
+.DS_Store
+Thumbs.db
+*.m4a
+*.mp3
+*.wav
+*.pdf
