@@ -1,4 +1,4 @@
-# Transcriptor
+﻿# Transcriptor
 
 **English** | [Español](#español)
 
@@ -168,4 +168,4 @@ python app.py
 
 ## Licencia
 
-MIT © 2026 letzzar
+GNU General Public License v3.0 — ver [LICENSE](LICENSE)
