@@ -4,7 +4,10 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
-## Sesión — Mac, F2 completada (Motor MLX)
+## CIERRE — Sesión Mac, F2 completada y sincronizada
+
+**Estado en remoto:** `origin/main` al día (commits `98e7218`, `7488e13`, `d49e251`).
+**Próxima plataforma:** a decisión del Director. F3 en Windows o F4 (UI ↔ MLX) en Mac.
 
 **Plataforma activa:** macOS 26.5 (Apple Silicon M5) — `/Volumes/Software/Mi software/Transcriptor`
 **Python:** 3.12.13 arm64 (Homebrew arm64 nativo en `/opt/homebrew`)
