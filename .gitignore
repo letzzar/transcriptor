@@ -6,9 +6,23 @@ __pycache__/
 *.pyc
 *.spec
 *.exe
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
 .DS_Store
 Thumbs.db
 *.m4a
 *.mp3
 *.wav
+*.flac
 *.pdf
+
+# Modelos descargados (caché HF)
+.cache/
+
+# Logs y reportes generados por el prototipo
+_AUDITORIA_LOG.txt
+_RESUMEN_EJECUTIVO_AUDITORIA.txt
+*_ANALIZADO.txt
+PROCESADOS/

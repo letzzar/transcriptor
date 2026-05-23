@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "transcriptor"
+version = "0.2.0"
+description = "Transcripción y auditoría de audio con diarización (PySide6)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "letzzar" }]
+
+# Runtime deps. Las pesadas (torch, pyannote, faster-whisper, mlx-whisper)
+# se instalan según se vayan necesitando por fase. Aquí solo lo mínimo
+# para arrancar la UI (F0).
+dependencies = [
+    "PySide6>=6.7",
+]
+
+[project.optional-dependencies]
+# Motores y pipeline (F2-F4)
+engines = [
+    "huggingface_hub>=0.24",
+    "faster-whisper>=1.0",
+    "pyannote.audio>=3.3",
+    "torch>=2.3",
+]
+mlx = [
+    "mlx-whisper>=0.4 ; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+report = [
+    "fpdf2>=2.7",
+    "tinytag>=2.0",
+]
+secrets = [
+    "keyring>=25",
+]
+
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "nuitka>=2.4",
+    "imageio",
+]
+
+[project.scripts]
+transcriptor = "transcriptor.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = false  # strict solo en pipeline/ y engines/ (override abajo)
+
+[[tool.mypy.overrides]]
+module = ["transcriptor.pipeline.*", "transcriptor.engines.*"]
+strict = true
