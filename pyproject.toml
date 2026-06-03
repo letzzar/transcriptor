@@ -51,6 +51,10 @@ transcriptor = "transcriptor.__main__:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+# Fuentes DejaVu embebidas en el PDF (UTF-8 real). Necesarias en runtime.
+transcriptor = ["resources/fonts/*.ttf"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
@@ -62,3 +66,10 @@ strict = false  # strict solo en pipeline/ y engines/ (override abajo)
 [[tool.mypy.overrides]]
 module = ["transcriptor.pipeline.*", "transcriptor.engines.*"]
 strict = true
+
+# Dependencias sin stubs de tipos.
+#   mlx-whisper / faster-whisper: motores opcionales por plataforma (en cada SO
+#   falta uno de los dos). tqdm: sin py.typed (lo usa download_worker).
+[[tool.mypy.overrides]]
+module = ["mlx_whisper", "faster_whisper", "tqdm"]
+ignore_missing_imports = true

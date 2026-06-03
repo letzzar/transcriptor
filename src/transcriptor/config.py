@@ -130,6 +130,23 @@ def set_last_folder(path: Path | str | None) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Modelo preferido
+# ---------------------------------------------------------------------------
+
+def get_preferred_model() -> str | None:
+    raw = _settings().value("models/preferred", "")
+    return str(raw) if raw else None
+
+
+def set_preferred_model(model_id: str | None) -> None:
+    s = _settings()
+    if model_id:
+        s.setValue("models/preferred", model_id)
+    else:
+        s.remove("models/preferred")
+
+
+# ---------------------------------------------------------------------------
 # Tema
 # ---------------------------------------------------------------------------
 

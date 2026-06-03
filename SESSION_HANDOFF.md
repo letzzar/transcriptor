@@ -4,6 +4,232 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
+## CIERRE — Sesión Windows, F6 (Reporte PDF) ✅
+
+**Fase:** F6 — Reporte PDF consolidado con UTF-8 real ✅.
+**Pendiente de commit:** F3+F4+F6 sin commitear (esperando visto bueno).
+
+- `report/pdf.py`: PDF con fpdf2, fuentes **DejaVu Sans/Mono embebidas** (UTF-8
+  real). **Corrige el bug `latin-1` del prototipo** (acentos, eñes, comillas
+  tipográficas se renderizan bien). API: `build_consolidated()`, `find_reports()`,
+  `consolidate(folder, archive=True)` → genera `CONSOLIDADO_<fecha>.pdf` y mueve
+  los originales a `PROCESADOS/`. Excepción `ReportError`.
+- Fuentes copiadas de matplotlib a `src/transcriptor/resources/fonts/`
+  (`DejaVuSans.ttf`, `DejaVuSans-Bold.ttf`, `DejaVuSansMono.ttf`). Declaradas en
+  `pyproject` como `package-data` (para wheel/Nuitka en F8).
+- `workers/unify_worker.py`: `UnifyWorker(QThread)` (gen PDF >50 ms → fuera del
+  hilo UI). Señales `finished_ok(str)` / `failed(str)`.
+- `MainWindow`: botón **"Unificar reportes (PDF)"** + acción de menú. Al terminar
+  abre la carpeta con `QDesktopServices.openUrl` (regla de oro: NO `os.startfile`).
+- Tests: `tests/test_report_pdf.py` (3) con texto acentuado/ñ/comillas → PDF
+  válido (`%PDF-`, >1 KB) y archivado correcto. **14 tests totales**, `ruff` +
+  `mypy` (29 archivos) verdes, app arranca sin traceback.
+- `fpdf2` instalado en `.venv`.
+
+**Pendiente de ver en vivo:** Transcribir una carpeta y luego "Unificar reportes"
+para ver el PDF consolidado y que abra la carpeta.
+
+---
+
+## CIERRE — Sesión Windows, F4 (pipeline completo) ✅ VERIFICADO E2E
+
+**Plataforma activa:** Windows 11 — `Y:\Mi software\Transcriptor` — `.venv` (Python 3.14.3)
+**Fase:** F4 — Pipeline completo ✅. Subdividida en 4a / 4b / 4c, todas cerradas.
+**Siguiente:** F5 (resto del gestor de modelos: eliminar/verificar) o F6 (PDF).
+**Pendiente de commit:** todo F3+F4 sin commitear aún (esperando visto bueno del Director).
+
+### Verificación E2E final (TranscribeWorker completo)
+
+`tests/smoke_pipeline.py` sobre la grabación de 2 personas:
+**89 turnos / 2 hablantes diarizados → 64 segmentos transcritos →
+etiquetas `Voz 1` / `Voz 2`** → `_ANALIZADO.txt` + resumen generados.
+Cumple el criterio de aceptación #3. Solo se imprimieron metadatos.
+(En un clip diminuto separado, pyannote dio 1 turno sin solape → `Voz Desconocida`;
+es comportamiento correcto del merge, no un bug.)
+
+**Nota de arranque (para F7):** en Windows, `detect_engine()→has_cuda()` importa
+`torch` al abrir la app (~unos segundos) para detectar CUDA. faster-whisper,
+pyannote y mlx siguen perezosos (verificado). Optimizable en F7 (cachear/diferir).
+
+### 4a — Pipeline puro ✅ (verificado)
+
+- `pipeline/__init__.py`, `pipeline/hashing.py` (SHA-256 + duración/fecha tinytag),
+  `pipeline/merge.py` (**bug `max_ovl, speaker = spk` corregido** + 6 tests de
+  regresión), `pipeline/audio.py` (FFmpeg → WAV 16 kHz mono + filtros limpieza +
+  `find_ffmpeg`), `report/__init__.py`, `report/txt.py` (formato legacy idéntico).
+- `platform.py`: helper `is_windows()` + `no_window_creationflags()` (no-op en Mac;
+  evita `CREATE_NO_WINDOW` directo).
+- Tests: `tests/test_merge.py`, `tests/test_hashing.py`, `tests/test_report_txt.py`.
+- Verificado: `audio.convert_to_wav(jfk.flac)` → WAV 16000 Hz / 1 ch / 176000 frames
+  con el ffmpeg de WinGet. 11 tests pasan.
+
+### 4b — Diarización (pyannote) ✅ VERIFICADO E2E
+
+**Smoke test superado** (`tests/smoke_diarization.py` sobre grabación telefónica
+real de prueba): 89 turnos, **2 hablantes** (SPEAKER_00/01) correctamente
+separados, 204 s de habla, ~221 s de cómputo en CPU. Solo se imprimen metadatos
+(nunca texto). El workaround de torchcodec (audio en memoria) funciona.
+
+Hallazgos resueltos durante la verificación:
+- pyannote 4.x `from_pretrained("speaker-diarization-3.1")` descarga internamente
+  el modelo gated **`pyannote/speaker-diarization-community-1`** (su PLDA). El
+  Director aceptó community-1 + submodelos. `DEFAULT_MODEL` cambiado a
+  `pyannote/speaker-diarization-community-1`.
+- pyannote 4.x `pipeline(...)` devuelve un **`DiarizeOutput`** (dataclass), no un
+  `Annotation`. `run()` extrae `.speaker_diarization` con `getattr` (robusto ante
+  legacy). También expone `.exclusive_speaker_diarization` (sin solapes) por si
+  en 4c conviene para el merge.
+- Rendimiento CPU lento (~tiempo real). El worker de 4c DEBE mostrar progreso /
+  "esto puede tardar". CUDA lo aceleraría.
+
+Detalle previo:
+
+- `pip install torch pyannote.audio` → **torch 2.12.0 + torchaudio 2.11.0 +
+  pyannote.audio 4.0.4** (¡no 3.x!). Wheels limpios en Python 3.14.
+- **DESVIACIÓN DE STACK**: el spec fijaba pyannote 3.1; pip resolvió 4.0.4 (la 3.x
+  puede no tener wheels en 3.14). Adoptada 4.x y documentado en `PROYECTO.md` §3/§5/§7.
+  El Director NO respondió la pregunta de versión → procedí con 4.x (recomendado).
+  Si prefiere 3.x, habría que recrear venv con Python 3.12.
+- API 4.x: `Pipeline.from_pretrained(model, token=...)` (no `use_auth_token`).
+- **torchcodec NO carga en Windows** (faltan DLLs "full-shared" de FFmpeg). Solución:
+  `diarization.py` pasa el audio en memoria (`{"waveform", "sample_rate"}`) leído con
+  `wave` stdlib, evitando torchcodec. WAV de entrada = el de `audio.py`.
+- `pipeline/diarization.py`: clase `Diarizer`, carga diferida, device auto,
+  `run(wav) -> list[Turn]`, errores claros (token ausente / modelo gated no aceptado).
+- **Calidad**: `ruff` limpio, **`mypy src` SIN issues en 24 archivos**, 11 tests pasan.
+  - Añadido override mypy en `pyproject` para `mlx_whisper`/`faster_whisper`
+    (`ignore_missing_imports`) — cada SO tiene solo uno de los dos motores.
+  - Quitados `type: ignore` sobrantes (faster_whisper/pyannote 4.x SÍ traen py.typed;
+    torch ya instalado). Anotado `parent: QObject|None` en `token_test_worker`.
+
+**Entorno de auditoría (privado):** carpeta de audios de prueba en
+`D:\Software mio\test` (10 grabaciones `.m4a`). **NO subir audios ni
+transcripciones a ningún sitio** (material de auditoría). Está fuera del repo;
+los smoke tests reciben la ruta por argumento para no hardcodearla.
+Token HF guardado en Credential Manager (keyring `WinVaultKeyring`).
+
+### 4c — Worker + integración UI (EN CURSO)
+
+#### Descarga de modelos UX (estilo LM Studio) ✅ código + mecanismo verificado
+
+A petición del Director, se adelantó parte del Gestor de modelos (F5) al primer
+arranque:
+- `models/downloader.py`: `total_size_bytes(model_id)` (suma tamaños vía
+  `HfApi.model_info`) y `download(..., tqdm_class=...)` para inyectar progreso.
+- `workers/download_worker.py`: `DownloadWorker(QThread)` con un `tqdm`
+  fabricado que captura los bytes de las barras `unit=="B"` y emite
+  `progress(int)`, `bytes_progress(i64,i64)`, `status(str)`, `finished_ok(str)`,
+  `failed(str)`. Throttle por % para no saturar la UI. `qint64` para >2 GB.
+- `ui/model_manager.py`: `ModelManagerDialog` con tabla (modelo/tamaño/estado/
+  acción), barra de progreso + "X MB / Y MB", y texto de bienvenida en
+  `first_run` sugiriendo el recomendado (`large-v3-turbo`).
+- `MainWindow`: menú **Modelos → Gestionar modelos…**; primer arranque encadena
+  (sin token → Settings; con token y sin modelos → Gestor con first_run).
+- **Verificado**: `total_size_bytes('base')`=147.9 MB exacto; captura de bytes
+  sumó 100%; `base` quedó descargado. Diálogo y ventana instancian offscreen.
+  `ruff`/`mypy` (26 archivos)/11 tests OK. Añadido `tqdm` al override de mypy.
+- **PENDIENTE de ver en vivo por el Director**: abrir la app y, en Modelos →
+  Gestionar modelos, descargar uno no presente (small/medium/large) para ver la
+  barra estilo LM Studio. (base+tiny ya están, por eso el first_run no salta.)
+
+#### Transcribe worker + controles principales ✅ VERIFICADO
+
+- `workers/transcribe_worker.py` (QThread) orquesta por archivo:
+  `audio.convert_to_wav` → `diarization.run` → `engine.transcribe` (via
+  `engines.make_engine`) → `merge.assign_speakers` → `report.txt.write_*`.
+  Señales: `status/log/progress/file_done/failed/finished_ok`. Emite
+  "Cargando motor de transcripción…" antes del 1er import pesado. Cancelación
+  por `requestInterruption()` entre archivos.
+  - **Criterio fallo diarización (decisión Director)**: no se pierde el archivo;
+    si `DiarizationError`, se transcribe etiquetando todo como `Voz 1` + aviso al log.
+- `MainWindow` reconstruida (`ui/main_window.py`): carpeta (Ctrl/Cmd+O, persiste
+  en QSettings), combo de modelos descargados, spin hablantes (2-5), botón
+  "Limpiar audio", Transcribir (Ctrl+R) + Cancelar, barra de progreso, estado y
+  panel de logs colapsable. Modelo preferido persistido (`config.get/set_preferred_model`).
+  `pipeline/audio.py`: `SUPPORTED_AUDIO_EXTENSIONS`.
+- Tests/smokes nuevos (reciben ruta por argumento, solo metadatos):
+  `tests/smoke_diarization.py`, `tests/smoke_pipeline.py`.
+- **Verificado E2E** (ver bloque de cierre arriba): 2 hablantes → Voz 1/Voz 2.
+  `ruff` + `mypy` (27 archivos) + 11 tests, todo verde.
+
+---
+
+## CIERRE — Sesión Windows, F3 completada (motor faster-whisper)
+
+**Plataforma activa:** Windows 11 — `Y:\Mi software\Transcriptor`
+**Python:** 3.14.3 (en `.venv`, NO `venv`)
+**Fase del roadmap:** F3 — Motor faster-whisper ✅
+**Próxima fase:** F4 — Pipeline completo (UI ↔ motor + audio + diarización + merge + txt).
+
+### Entorno preparado en Windows
+
+- El `venv/` del repo es el de **Mac** (sincronizado por SMB, layout `bin/`,
+  apunta a Homebrew) → **inservible en Windows**. Se creó uno nuevo `.venv`
+  (también en `.gitignore`) para no chocar ni sufrir el borrado lento por SMB.
+- `py -3.14` y `py -3.10` disponibles. Se usó **3.14** (cumple `requires-python>=3.11`).
+- `python -m venv .venv` + `pip install -e . "keyring>=25" "faster-whisper>=1.0"`.
+- **faster-whisper 1.2.1 + ctranslate2 4.7.2 instalan sin problema en 3.14.**
+  Arrastra: huggingface_hub 1.17, av 17 (PyAV), onnxruntime, tokenizers, numpy 2.4.
+- **NO se instaló torch.** faster-whisper usa CTranslate2, no torch. torch
+  entra con pyannote en F4-F5. Por eso `has_cuda()` → False aquí (graceful) y
+  `detect_engine()` → `"faster-cpu"`. Correcto.
+- **FFmpeg NO es necesario** para transcribir: faster-whisper decodifica el
+  audio con PyAV (`av`). FFmpeg seguirá haciendo falta para la conversión/
+  filtros del pipeline en F4.
+
+### Verificado en Windows
+
+- `detect_engine()` → `"faster-cpu"` ✓
+- `python -m transcriptor` arranca sin traceback (offscreen) ✓
+- `make_engine('tiny')` → `FasterEngine`, device auto→`cpu`, compute→`int8` ✓
+- **Lazy imports**: tras `from transcriptor.engines import make_engine` y crear
+  el motor, `faster_whisper` y `mlx_whisper` NO están en `sys.modules`. Solo se
+  cargan en `transcribe()`. La UI no paga el import al arrancar ✓
+- `ruff check src tests/smoke_faster.py` → All checks passed ✓
+- `mypy` sobre `faster_engine.py` y `engines/__init__.py` → limpio ✓
+  (queda 1 error en `mlx_engine.py`: `mlx_whisper import-not-found`, esperado en
+   Windows porque mlx-whisper es Mac-only por marcador de plataforma; en Mac pasa).
+- Smoke test E2E (`tests/smoke_faster.py`) con `tiny` CT2 sobre JFK 11 s:
+  - Modelo `Systran/faster-whisper-tiny` descargado a
+    `~/.cache/huggingface/hub/models--Systran--faster-whisper-tiny/`.
+  - Transcripción correcta: *"And so my fellow Americans, ask not what your
+    country can do for you, ask what you can do for your country."*
+    (`language=en`, [0.00 → 11.00]). ~7-8 s en frío en CPU int8.
+
+### Completado en F3
+
+- `src/transcriptor/engines/faster_engine.py`:
+  - `FasterEngine(model_id="large-v3-turbo", *, device="auto", compute_type="auto")`.
+  - `device="auto"` → `"cuda"` si `has_cuda()`, si no `"cpu"`.
+  - `compute_type="auto"` → `"float16"` en CUDA, `"int8"` en CPU.
+  - `ensure_model()` reutiliza `downloader.download()` (que resuelve el repo CT2
+    vía `registry.resolve()`). `_load_model()` cachea el `WhisperModel`.
+  - Import diferido de `faster_whisper.WhisperModel` dentro de `_load_model()`.
+  - Convierte los segmentos perezosos de faster-whisper a `list[Segment]`.
+- `src/transcriptor/engines/__init__.py`:
+  - `make_engine(model_id) -> TranscriptionEngine` → `MlxEngine` o `FasterEngine`
+    según `detect_engine()`, con imports diferidos por plataforma.
+  - Reexporta `Segment`, `TranscriptionEngine`.
+- `tests/smoke_faster.py` — análogo a `smoke_mlx.py`; salta (código 2) si el
+  motor es MLX. Reconfigura `sys.stdout` a UTF-8 (la consola Windows es cp1252 y
+  rompía al imprimir flechas/ellipsis).
+
+### Pendiente / notas para F4
+
+- **mypy cross-platform**: el error `mlx_whisper import-not-found` solo aparece
+  donde mlx no está instalado (Windows). Si molesta, añadir override en
+  `pyproject` (`[[tool.mypy.overrides]] module=["mlx_whisper","faster_whisper"]
+  ignore_missing_imports=true`). No lo hice para no tocar config sin pedirlo.
+- **F4 (integración UI ↔ motor)**: usar `engines.make_engine(model_id)` —
+  abstrae MLX vs faster-whisper. La carga del `WhisperModel` (faster) o el
+  primer import de `mlx_whisper` (Mac) es lo pesado → emitir señal
+  "Cargando motor…" desde el worker ANTES, no solo al empezar a transcribir.
+- pyannote + torch entran en F4-F5; en Windows con NVIDIA instalar torch CUDA
+  para que `has_cuda()`→True y `FasterEngine` use `float16` automáticamente.
+- Rendimiento real CPU de modelos grandes se medirá cuando F4 procese audio real.
+
+---
+
 ## CIERRE — Sesión Mac, F2 completada y sincronizada
 
 **Estado en remoto:** `origin/main` al día (commits `98e7218`, `7488e13`, `d49e251`).

@@ -6,7 +6,7 @@ la llamada HTTP.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QObject, QThread, Signal
 
 
 class TokenTestWorker(QThread):
@@ -19,7 +19,7 @@ class TokenTestWorker(QThread):
 
     result = Signal(bool, str)
 
-    def __init__(self, token: str, parent=None) -> None:
+    def __init__(self, token: str, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._token = token
 

@@ -35,7 +35,7 @@ Aplicación de escritorio multiplataforma (Windows y macOS) para transcribir y a
 | Almacén de credenciales | **`keyring`** (Keychain / Credential Manager) | Nunca toca disco en claro. |
 | Motor Whisper macOS Apple Silicon | **mlx-whisper** | 3-5× más rápido que faster-whisper en M1-M4 y menos RAM. |
 | Motor Whisper resto | **faster-whisper** | Mejor rendimiento CTranslate2 en CUDA y CPU x86. |
-| Diarización | **pyannote.audio 3.1** | Único modelo open con calidad razonable hoy. |
+| Diarización | **pyannote.audio 4.x** (modelo `pyannote/speaker-diarization-community-1`) | Único modelo open con calidad razonable hoy. Se adoptó la 4.x en F4 (wheels para Python 3.14). La 4.x usa internamente `speaker-diarization-community-1` (gated, requiere aceptación aparte) aunque se pida la "3.1". |
 | Empaquetado | **Nuitka** | Compila Python a binario nativo. Ejecutable más pequeño y arranque más rápido que alternativas. Decisión del Director (ver `CLAUDE.md` §6). |
 | Settings | **QSettings** + **`keyring`** | Settings normales en QSettings; secretos en keyring. |
 | Threading | **QThread + signals** | Pattern Qt idiomático; no bloquea la UI. |
@@ -82,7 +82,7 @@ transcriptor/
 ```
 # Runtime
 PySide6>=6.7
-pyannote.audio>=3.3
+pyannote.audio>=4.0           # F4: 4.x por wheels en Python 3.14 (modelo dia-3.1)
 faster-whisper>=1.0           # Windows + Mac Intel
 mlx-whisper>=0.4 ; sys_platform == "darwin" and platform_machine == "arm64"
 huggingface_hub>=0.24
@@ -158,6 +158,16 @@ if ovl > max_ovl:
     max_ovl = ovl
     speaker = spk
 ```
+Corregido en `pipeline/merge.py:_best_speaker` (F4a), con tests de regresión.
+
+### Decodificación de audio en pyannote 4.x (Windows)
+pyannote.audio 4.x decodifica audio con `torchcodec`, que en Windows requiere
+las DLLs "full-shared" de FFmpeg (el build estático de WinGet no las trae).
+Para no depender de eso, `pipeline/diarization.py` **no pasa la ruta del WAV** a
+pyannote, sino el audio ya decodificado en memoria
+(`{"waveform": tensor, "sample_rate": sr}`), leído con el módulo `wave` de la
+stdlib. El WAV de entrada lo produce `pipeline/audio.py` (16 kHz mono 16-bit),
+así que la lectura es trivial y robusta en cualquier plataforma.
 
 ## 8. Pantallas / UX
 

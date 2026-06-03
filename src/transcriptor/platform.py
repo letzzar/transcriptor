@@ -32,7 +32,9 @@ def has_cuda() -> bool:
     sin romper. Esto permite ejecutar la UI antes de instalar los motores.
     """
     try:
-        import torch  # type: ignore[import-not-found]
+        # El ignore cubre los entornos sin torch (F0); unused-ignore evita el
+        # warning donde torch sí está instalado.
+        import torch  # type: ignore[import-not-found,unused-ignore]
     except ImportError:
         return False
     return bool(torch.cuda.is_available())
@@ -54,3 +56,22 @@ def engine_label(engine: Engine) -> str:
         "faster-cuda": "faster-whisper (CUDA)",
         "faster-cpu": "faster-whisper (CPU)",
     }[engine]
+
+
+def is_windows() -> bool:
+    """True si corremos en Windows."""
+    return sys.platform == "win32"
+
+
+def no_window_creationflags() -> int:
+    """`creationflags` para `subprocess` que oculta la consola en Windows.
+
+    Devuelve 0 en macOS/Linux (no-op: 0 es el valor por defecto y válido en
+    todas las plataformas). Evita usar `subprocess.CREATE_NO_WINDOW`
+    directamente en código compartido, que solo existe en Windows.
+    """
+    if is_windows():
+        import subprocess
+
+        return subprocess.CREATE_NO_WINDOW
+    return 0
