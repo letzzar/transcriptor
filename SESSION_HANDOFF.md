@@ -4,6 +4,51 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
+## CIERRE — Sesión Windows, F7 (Tema + pulido UX) ✅
+
+- `ui/theme.py`: `apply_theme(app, theme)` — claro / oscuro (paleta Fusion) /
+  auto (sigue el SO vía `styleHints().colorScheme()`). Se aplica al arranque
+  (`app.main`) y en caliente al guardar Preferencias.
+- Icono de la app: `logo_app.ico` copiado a `resources/`, `app.setWindowIcon`
+  en el arranque. `ui/resources.py` con `app_icon_path()`. `package-data`
+  ampliado a `resources/*.ico`.
+- Atajos (ya desde F4): Ctrl/Cmd+O carpeta, Ctrl+R transcribir, Ctrl/Cmd+,
+  Preferencias. Errores al usuario con QMessageBox (humano) en toda la UI.
+- Verificado: paleta oscura (lightness 45) vs clara (239); auto OK; app arranca.
+  `ruff` + `mypy` (31 archivos) + 18 tests, verdes.
+
+**Pendiente menor (no bloqueante):** en Windows `torch` se importa al arranque
+(chequeo CUDA en `has_cuda()`); optimizable diferiéndolo. `.icns` para Mac en F8.
+
+**Estado roadmap:** F0–F7 ✅. Falta **F8 — Nuitka** (empaquetado `.app`/`.exe`).
+**Sin commitear:** F5 + F7 (F3+F4+F6 ya en commit `a8bf242`, rama `feat/f3-f4-f6`).
+
+---
+
+## CIERRE — Sesión Windows, F5 (gestor de modelos: eliminar/verificar) ✅
+
+- `models/downloader.py`: `local_size_bytes()`, `delete()` (rmtree del
+  `models--<repo>`, devuelve bytes liberados), `verify()` (completitud vía
+  `snapshot_download(local_files_only=True)`), helper `_cache_repo_dir()`.
+- `ui/model_manager.py`: filas con **Verificar** + **Eliminar** para modelos
+  descargados (antes solo "Descargar"); estado muestra tamaño en disco;
+  confirmación al eliminar; refresco de fila.
+- Tests offline: `tests/test_downloader.py` (4) con caché falsa en tmp_path.
+  **18 tests totales**, ruff + mypy verdes.
+
+**Hallazgo Windows — caché HF duplica en disco (~2×):** sin symlinks (Dev Mode
+off), HF guarda blobs + copias en snapshots → `tiny` ocupa ~156 MB (no 75),
+`small` ~972 MB (no 480). `local_size_bytes()` reporta el uso REAL en disco; por
+eso el "Descargado · X MB" difiere del "≈ Y MB" (tamaño de descarga del registro).
+Es correcto, solo conviene saberlo.
+
+**Incidencia (resuelta):** un test mío de `delete()` asumió que `small` no estaba
+descargado, pero el Director lo había bajado en su prueba en vivo → lo borró sin
+querer. **Restaurado** re-descargándolo. Lección: `delete()` es destructivo; no
+probarlo sobre modelos reales del usuario (el test offline ya lo cubre).
+
+---
+
 ## CIERRE — Sesión Windows, F6 (Reporte PDF) ✅
 
 **Fase:** F6 — Reporte PDF consolidado con UTF-8 real ✅.

@@ -33,16 +33,62 @@ def total_size_bytes(model_id: str) -> int | None:
     return total or None
 
 
+def _cache_repo_dir(model_id: str) -> Path:
+    """Carpeta `models--<repo>` del modelo en la caché de HuggingFace."""
+    repo = registry.resolve(model_id)
+    return config.get_models_cache_dir() / f"models--{repo.replace('/', '--')}"
+
+
 def is_downloaded(model_id: str) -> bool:
     """Devuelve True si el snapshot del modelo ya existe en la caché.
 
     No verifica integridad; solo presencia. Útil para decidir si mostrar
     "Descargar" o "Listo" en la UI.
     """
-    repo = registry.resolve(model_id)
-    cache_dir = config.get_models_cache_dir()
-    snapshots = cache_dir / f"models--{repo.replace('/', '--')}" / "snapshots"
+    snapshots = _cache_repo_dir(model_id) / "snapshots"
     return snapshots.exists() and any(snapshots.iterdir())
+
+
+def local_size_bytes(model_id: str) -> int:
+    """Tamaño en disco del modelo en la caché (0 si no está)."""
+    repo_dir = _cache_repo_dir(model_id)
+    if not repo_dir.exists():
+        return 0
+    return sum(f.stat().st_size for f in repo_dir.rglob("*") if f.is_file())
+
+
+def delete(model_id: str) -> int:
+    """Borra el modelo de la caché. Devuelve los bytes liberados (0 si no estaba)."""
+    import shutil
+
+    repo_dir = _cache_repo_dir(model_id)
+    if not repo_dir.exists():
+        return 0
+    freed = local_size_bytes(model_id)
+    shutil.rmtree(repo_dir, ignore_errors=True)
+    return freed
+
+
+def verify(model_id: str) -> bool:
+    """Comprueba que el snapshot está completo en la caché (sin red).
+
+    Usa `snapshot_download(local_files_only=True)`: si falta algún archivo,
+    lanza y devolvemos False. No es un checksum, pero detecta descargas
+    incompletas o cachés corrompidas.
+    """
+    from huggingface_hub import snapshot_download
+
+    if not is_downloaded(model_id):
+        return False
+    try:
+        snapshot_download(
+            repo_id=registry.resolve(model_id),
+            cache_dir=str(config.get_models_cache_dir()),
+            local_files_only=True,
+        )
+    except Exception:
+        return False
+    return True
 
 
 def download(model_id: str, *, tqdm_class: Any | None = None) -> Path:

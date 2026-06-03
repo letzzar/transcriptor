@@ -52,8 +52,8 @@ transcriptor = "transcriptor.__main__:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-# Fuentes DejaVu embebidas en el PDF (UTF-8 real). Necesarias en runtime.
-transcriptor = ["resources/fonts/*.ttf"]
+# Recursos en runtime: fuentes DejaVu (PDF UTF-8) e icono de la app.
+transcriptor = ["resources/fonts/*.ttf", "resources/*.ico"]
 
 [tool.ruff]
 line-length = 100

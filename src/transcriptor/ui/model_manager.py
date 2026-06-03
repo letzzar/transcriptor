@@ -41,7 +41,7 @@ class ModelManagerDialog(QDialog):
         self.resize(620, 420)
 
         self._worker: DownloadWorker | None = None
-        self._buttons: dict[str, QPushButton] = {}
+        self._action_cells: dict[str, QWidget] = {}
         self._rows: dict[str, int] = {}
 
         layout = QVBoxLayout(self)
@@ -102,26 +102,64 @@ class ModelManagerDialog(QDialog):
         row = self._rows[model_id]
         done = downloader.is_downloaded(model_id)
 
-        estado = QTableWidgetItem("Descargado" if done else "No descargado")
-        self._table.setItem(row, 2, estado)
+        if done:
+            estado_txt = f"Descargado · {_fmt_mb(downloader.local_size_bytes(model_id))}"
+        else:
+            estado_txt = "No descargado"
+        self._table.setItem(row, 2, QTableWidgetItem(estado_txt))
 
-        btn = QPushButton("Descargado" if done else "Descargar")
-        btn.setEnabled(not done)
-        btn.clicked.connect(lambda _checked=False, mid=model_id: self._start_download(mid))
-        self._buttons[model_id] = btn
-        self._table.setCellWidget(row, 3, btn)
+        cell = QWidget()
+        cell_layout = QHBoxLayout(cell)
+        cell_layout.setContentsMargins(0, 0, 0, 0)
+        cell_layout.setSpacing(4)
+        if done:
+            verify_btn = QPushButton("Verificar")
+            verify_btn.clicked.connect(lambda _c=False, mid=model_id: self._verify_model(mid))
+            cell_layout.addWidget(verify_btn)
+            delete_btn = QPushButton("Eliminar")
+            delete_btn.clicked.connect(lambda _c=False, mid=model_id: self._delete_model(mid))
+            cell_layout.addWidget(delete_btn)
+        else:
+            download_btn = QPushButton("Descargar")
+            download_btn.clicked.connect(lambda _c=False, mid=model_id: self._start_download(mid))
+            cell_layout.addWidget(download_btn)
+        self._action_cells[model_id] = cell
+        self._table.setCellWidget(row, 3, cell)
+
+    def _set_actions_enabled(self, enabled: bool) -> None:
+        for cell in self._action_cells.values():
+            cell.setEnabled(enabled)
+
+    # --------------------------------------------------------- verificar/eliminar
+
+    def _verify_model(self, model_id: str) -> None:
+        label = registry.get(model_id).label
+        if downloader.verify(model_id):
+            QMessageBox.information(self, "Verificación", f"{label}: el modelo está completo.")
+        else:
+            QMessageBox.warning(
+                self,
+                "Verificación",
+                f"{label}: el modelo parece incompleto. Conviene descargarlo de nuevo.",
+            )
+            self._refresh_row(model_id)
+
+    def _delete_model(self, model_id: str) -> None:
+        label = registry.get(model_id).label
+        if QMessageBox.question(self, "Eliminar modelo", f"¿Eliminar {label} de la caché?") != QMessageBox.StandardButton.Yes:
+            return
+        freed = downloader.delete(model_id)
+        self._refresh_row(model_id)
+        self._status.setText(f"{label} eliminado ({_fmt_mb(freed)} liberados).")
+        self._status.setVisible(True)
 
     # --------------------------------------------------------------- descarga
-
-    def _set_buttons_enabled(self, enabled: bool) -> None:
-        for mid, btn in self._buttons.items():
-            btn.setEnabled(enabled and not downloader.is_downloaded(mid))
 
     def _start_download(self, model_id: str) -> None:
         if self._worker is not None:
             return  # ya hay una descarga en curso
 
-        self._set_buttons_enabled(False)
+        self._set_actions_enabled(False)
         self._status.setText(f"Preparando descarga de {registry.get(model_id).label}…")
         self._status.setVisible(True)
         self._progress.setVisible(True)
@@ -156,13 +194,13 @@ class ModelManagerDialog(QDialog):
         self._progress.setValue(100)
         self._status.setText(f"{registry.get(model_id).label} descargado.")
         self._refresh_row(model_id)
-        self._set_buttons_enabled(True)
+        self._set_actions_enabled(True)
 
     def _on_failed(self, model_id: str, message: str) -> None:
         self._worker = None
         self._progress.setVisible(False)
         self._status.setVisible(False)
-        self._set_buttons_enabled(True)
+        self._set_actions_enabled(True)
         QMessageBox.critical(
             self,
             "Error al descargar",

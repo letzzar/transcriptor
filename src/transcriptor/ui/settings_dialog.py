@@ -15,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -31,6 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from transcriptor import config
+from transcriptor.ui.theme import apply_theme
 from transcriptor.workers.token_test_worker import TokenTestWorker
 
 
@@ -192,7 +194,12 @@ class SettingsDialog(QDialog):
         default_cache = str(config.default_models_cache_dir())
         config.set_models_cache_dir(None if cache_value == default_cache else cache_value)
         config.set_language(self.language_combo.currentData())
-        config.set_theme(self.theme_combo.currentData())
+        theme = self.theme_combo.currentData()
+        config.set_theme(theme)
+        # Aplica el tema en caliente sin reiniciar la app.
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            apply_theme(app, theme)
         self.accept()
 
     # --------------------------------------------------------------- handlers
