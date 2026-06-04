@@ -4,6 +4,34 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
+## ⚡ ESTADO AL REINICIAR (Claude update) — leer esto primero
+
+**Última acción:** compilando el `.exe` en la copia local **D:** (Nuitka, en
+background, independiente de la sesión — sigue aunque se reinicie Claude).
+Todo el código está commiteado en Y: (rama `feat/f3-f4-f6`, último `ea34eb6`).
+
+**Al retomar, comprobar si el build terminó:**
+```
+dir "D:\Software mio\Transcriptor\dist\__main__.dist\Transcriptor.exe"
+```
+- **Si existe:** lanzarlo y probar a transcribir la carpeta de test. El build
+  lleva TODOS los fixes (disco local, telemetría off, skip-dep-check, metadata
+  con nombres correctos `pyannote-audio`…). Debería pasar de pyannote. Si la
+  transcripción (faster_whisper/ctranslate2) pide otro data-file, añadir su
+  `--include-package-data`/metadata y recompilar EN D: (local, rápido).
+- **Si NO existe** (el build no acabó o falló): recompilar desde D: con el
+  comando de "Compilar en D:" (abajo). NUNCA compilar desde Y: (NAS → crash
+  `OSError [Errno 22]`).
+
+**Estado del proyecto:** F0–F7 ✅ completas y verificadas. F8 (empaquetado) al
+~95%: el `.exe` compila y arranca; falta confirmar la transcripción completa
+dentro del bundle (iterando data-files si hace falta). Mac `.app`/`.icns` → F8 Mac.
+
+**Workflow nuevo (importante):** editar+commit en **Y:** (canónica) → sincronizar
+a D: con `git push local feat/f3-f4-f6` → **compilar en D:** (local). Detalle abajo.
+
+---
+
 ## INFRAESTRUCTURA — Copia local de build en D: (evita el NAS)
 
 Para compilar sin los crashes del NAS (SMB) y mucho más rápido, hay **dos copias**:
