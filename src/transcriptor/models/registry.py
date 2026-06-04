@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from transcriptor.platform import detect_engine
+from transcriptor.platform_info import detect_engine
 
 
 @dataclass(frozen=True)

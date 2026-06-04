@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 from transcriptor.engines.faster_engine import FasterEngine
-from transcriptor.platform import detect_engine
+from transcriptor.platform_info import detect_engine
 
 # La consola de Windows usa cp1252 por defecto y no puede imprimir los
 # caracteres Unicode de salida (flechas, ellipsis). Forzamos UTF-8.

@@ -4,6 +4,43 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
+## EN CURSO — Sesión Windows, F8 (Nuitka) — build OK, fix de shadowing, rebuild
+
+**Fase:** F8 — Empaquetado Nuitka (Windows `.exe`).
+
+### Hecho
+- `scripts/build_windows.bat` (ASCII + CRLF + activa `.venv`; el `.bat` necesita
+  CRLF o cmd lo parsea mal). `.gitattributes` con `*.bat text eol=crlf`.
+- `scripts/installer.iss` (Inno Setup; empaqueta `dist\__main__.dist`).
+- Toolchain: **Nuitka 4.1.2 + MSVC cl 14.5** (no hace falta MinGW).
+- Build standalone **compila con exit 0**: `dist\__main__.dist\Transcriptor.exe`
+  (exe 576 MB; carpeta dist ~7.3 GB con los 9412 data files de torch).
+
+### Bug crítico que destapó el empaquetado (CORREGIDO)
+El `.exe` **crasheaba al arrancar**: `module 'platform' has no attribute 'system'`.
+Causa: nuestro `transcriptor/platform.py` **colisiona con el `platform` de la
+stdlib**; en el bundle Nuitka, `keyring`→`jaraco.context` hacía `import platform`
+y resolvía el nuestro. En Python normal no pasa (imports absolutos), solo en bundle.
+**Fix:** renombrado `platform.py` → **`platform_info.py`** (git mv) + actualizados
+los 8 imports (src + smokes) + docs (CLAUDE.md, PROYECTO.md). ruff + mypy (31) +
+18 tests verdes tras el rename. **Rebuild en curso** para confirmar el arranque.
+
+### Avisos de Nuitka a vigilar
+- Python 3.14 es **solo experimental** en Nuitka 4.1.2 (recomienda 3.13 / Nuitka
+  más nuevo). Si el rebuild da problemas, subir Nuitka o empaquetar con 3.12/3.13.
+- Sugiere apuntar al directorio del paquete en vez de `__main__.py` (benigno).
+- `--windows-console-mode=disable` → exe sin consola; para depurar el arranque,
+  compilar temporalmente con `=force` para ver el traceback (así se cazó el bug).
+
+### Pendiente F8
+- Confirmar que el exe arranca tras el rename.
+- Posibles iteraciones por data-files de runtime (pyannote/lightning configs) que
+  solo fallan al usar la app empaquetada.
+- `.app`/`.icns` de Mac → en sesión Mac.
+- Sin commitear: F8 (scripts + rename). Commitear cuando el exe arranque.
+
+---
+
 ## CIERRE — Sesión Windows, F7 (Tema + pulido UX) ✅
 
 - `ui/theme.py`: `apply_theme(app, theme)` — claro / oscuro (paleta Fusion) /

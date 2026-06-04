@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from transcriptor.platform import is_windows, no_window_creationflags
+from transcriptor.platform_info import is_windows, no_window_creationflags
 
 # Filtros de reducción de ruido del prototipo (paso banda voz + denoise + gate).
 _CLEANUP_FILTERS = "highpass=f=200, lowpass=f=3000, afftdn=nr=10:nf=-25, agate=threshold=-30dB:ratio=2"

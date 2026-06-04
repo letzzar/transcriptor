@@ -13,7 +13,7 @@ Windows ni faster-whisper en Mac ARM.
 from __future__ import annotations
 
 from transcriptor.engines.base import Segment, TranscriptionEngine
-from transcriptor.platform import detect_engine
+from transcriptor.platform_info import detect_engine
 
 __all__ = ["Segment", "TranscriptionEngine", "make_engine"]
 

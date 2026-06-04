@@ -14,7 +14,7 @@ from typing import Iterable
 
 from transcriptor.engines.base import Segment
 from transcriptor.models import downloader
-from transcriptor.platform import has_cuda
+from transcriptor.platform_info import has_cuda
 
 
 class FasterEngine:

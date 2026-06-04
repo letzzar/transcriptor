@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 
 from transcriptor import config
 from transcriptor.pipeline.merge import Turn
-from transcriptor.platform import has_cuda
+from transcriptor.platform_info import has_cuda
 
 if TYPE_CHECKING:
     import torch

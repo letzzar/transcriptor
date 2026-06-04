@@ -125,7 +125,7 @@ La especificación completa está en `PROYECTO.md`. Léelo siempre antes de empe
 src/transcriptor/
 ├── __main__.py
 ├── app.py                  # QApplication bootstrap
-├── platform.py             # detect_os, detect_gpu, detect_engine → "mlx" | "faster-cuda" | "faster-cpu"
+├── platform_info.py        # detect_os, detect_gpu, detect_engine → "mlx" | "faster-cuda" | "faster-cpu" (NO "platform.py": colisiona con la stdlib en bundles Nuitka)
 ├── config.py               # QSettings + keyring
 ├── models/{registry,downloader}.py
 ├── engines/{base,mlx_engine,faster_engine}.py
@@ -143,7 +143,7 @@ No metas lógica de negocio en widgets. Workers en `workers/`, pipeline puro en 
 2. **Paths siempre absolutos** (`pathlib.Path`). Nunca `os.chdir`.
 3. **Nada Windows-only ni Mac-only en código compartido**:
    - No `os.startfile` → `QDesktopServices.openUrl(QUrl.fromLocalFile(p))`.
-   - No `subprocess.CREATE_NO_WINDOW` directo → helper en `platform.py` que sea no-op en Mac.
+   - No `subprocess.CREATE_NO_WINDOW` directo → helper en `platform_info.py` que sea no-op en Mac.
 4. **PDF en UTF-8.** Embeber `DejaVuSans.ttf` con fpdf2. Prohibido `text.encode('latin-1', 'replace')`.
 5. **HF_TOKEN solo desde `config.get_hf_token()`** (keyring). `os.getenv("HF_TOKEN")` solo como fallback de migración del prototipo.
 6. **No `print()` en producción.** `logging` configurado al arranque, que escriba a archivo + emita signal al panel de logs Qt.

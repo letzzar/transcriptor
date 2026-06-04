@@ -2,7 +2,7 @@
 
 Cada motor (mlx_engine, faster_engine) implementa el Protocol
 `TranscriptionEngine` y devuelve una secuencia de `Segment`. La elección
-del motor en runtime la hace `transcriptor.platform.detect_engine()`.
+del motor en runtime la hace `transcriptor.platform_info.detect_engine()`.
 """
 
 from __future__ import annotations

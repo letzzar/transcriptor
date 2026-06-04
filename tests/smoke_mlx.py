@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 
 from transcriptor.engines.mlx_engine import MlxEngine
-from transcriptor.platform import detect_engine
+from transcriptor.platform_info import detect_engine
 
 AUDIO = Path(__file__).parent / "fixtures" / "jfk.flac"
 

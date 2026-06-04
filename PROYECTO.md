@@ -48,7 +48,7 @@ transcriptor/
 ├── src/transcriptor/
 │   ├── __main__.py            # Entry point
 │   ├── app.py                 # QApplication + bootstrap
-│   ├── platform.py            # Detección SO / GPU / motor
+│   ├── platform_info.py       # Detección SO / GPU / motor (no "platform.py": colisiona con stdlib en Nuitka)
 │   ├── config.py              # QSettings + keyring wrapper
 │   ├── models/
 │   │   ├── registry.py        # Catálogo de modelos por plataforma
@@ -120,7 +120,7 @@ Binario externo, no se distribuye con la app (licencia). Estrategia:
 | `large-v3` | `mlx-community/whisper-large-v3-mlx` | `Systran/faster-whisper-large-v3` | 3 GB |
 | `large-v3-turbo` | `mlx-community/whisper-large-v3-turbo` | `mobiuslabsgmbh/faster-whisper-large-v3-turbo` | 1.6 GB |
 
-`registry.py` expone `resolve(model_id) -> HFRepo` que devuelve el repo correcto según `platform.detect_engine()`.
+`registry.py` expone `resolve(model_id) -> HFRepo` que devuelve el repo correcto según `platform_info.detect_engine()`.
 
 ### Descarga
 - `huggingface_hub.snapshot_download` con `tqdm` redirigido a `QProgressBar` vía signals.
@@ -293,7 +293,7 @@ Alternativa: un único instalador que descargue torch+CUDA al primer arranque de
 | Fase | Entrega |
 |---|---|
 | **F0 — Esqueleto** | `pyproject.toml`, layout `src/transcriptor/`, ventana vacía PySide6 que abre en Mac y Win. |
-| **F1 — Settings + detección** | Diálogo settings, keyring, `platform.detect_engine()`, persistencia. |
+| **F1 — Settings + detección** | Diálogo settings, keyring, `platform_info.detect_engine()`, persistencia. |
 | **F2 — Motor MLX** | `MlxEngine` funcionando en Mac ARM con un modelo. |
 | **F3 — Motor faster-whisper** | `FasterEngine` con CPU + CUDA. |
 | **F4 — Pipeline completo** | Audio → diarización → merge → txt. |

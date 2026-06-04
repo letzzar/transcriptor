@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 
 from transcriptor import __version__, config
 from transcriptor.models import downloader, registry
-from transcriptor.platform import detect_engine, detect_os, engine_label
+from transcriptor.platform_info import detect_engine, detect_os, engine_label
 from transcriptor.ui.model_manager import RECOMMENDED_MODEL, ModelManagerDialog
 from transcriptor.ui.settings_dialog import SettingsDialog
 from transcriptor.workers.transcribe_worker import TranscribeWorker
