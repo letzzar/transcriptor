@@ -40,12 +40,6 @@ python -m nuitka ^
   --include-package-data=pytorch_lightning ^
   --include-package-data=asteroid_filterbanks ^
   --include-distribution-metadata=pyannote-audio ^
-  --include-distribution-metadata=pyannote-core ^
-  --include-distribution-metadata=pyannote-database ^
-  --include-distribution-metadata=pyannote-metrics ^
-  --include-distribution-metadata=pyannote-pipeline ^
-  --include-distribution-metadata=lightning ^
-  --include-distribution-metadata=pytorch-lightning ^
   --output-dir=dist ^
   --output-filename=Transcriptor.exe ^
   src\transcriptor\__main__.py
