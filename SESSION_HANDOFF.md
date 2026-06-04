@@ -4,6 +4,37 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
+## INFRAESTRUCTURA — Copia local de build en D: (evita el NAS)
+
+Para compilar sin los crashes del NAS (SMB) y mucho más rápido, hay **dos copias**:
+
+- **`Y:\Mi software\Transcriptor`** = CANÓNICA. Aquí se edita y commitea. Es el
+  cwd del harness y tiene `origin` → GitHub (`git@github.com:letzzar/transcriptor`).
+- **`D:\Software mio\Transcriptor`** = COPIA LOCAL DE BUILD. Disco local (rápido,
+  sin SMB). Aquí se **compila con Nuitka**. Tiene su propio `.venv` (Python 3.14,
+  recreado desde el freeze de Y: + `pip install -e .`).
+
+**Verificado:** imports OK, `detect_engine()=faster-cpu`, 18 tests pasan, ruff OK.
+pytest en D: tarda ~5 s (vs ~37 s en Y:): el disco local es ~8× más rápido.
+
+### Sincronización git (bidireccional, sin pasar por GitHub)
+Ambos repos tienen `receive.denyCurrentBranch=updateInstead` (permite push a la
+rama activa). Remotos cruzados:
+- En Y:  `local` → `D:\Software mio\Transcriptor`
+- En D:  `nas`   → `Y:\Mi software\Transcriptor`
+
+**Flujo:** editar+commit en Y: → `git push local feat/f3-f4-f6` actualiza la
+copia D: (código y working tree) → compilar en D:. (O al revés: commit en D: →
+`git push nas ...` actualiza Y:.) Si cambian dependencias, recrear/actualizar el
+`.venv` de D: también.
+
+### Compilar en D:
+El `build_windows.bat` es portable (rutas relativas + activa `.venv`): ejecutado
+desde la copia D:, `--output-dir=dist` escribe a `D:\...\dist` (LOCAL). Mismo
+comando que en el handoff de F8, pero corriendo desde D:.
+
+---
+
 ## EN CURSO — Sesión Windows, F8 (Nuitka) — build OK, fix de shadowing, rebuild
 
 **Fase:** F8 — Empaquetado Nuitka (Windows `.exe`).

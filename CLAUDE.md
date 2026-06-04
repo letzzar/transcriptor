@@ -73,7 +73,12 @@ Al iniciar cualquier sesión:
 
 Rutas según plataforma:
 - **Mac:** `/Volumes/Software/Mi\ software/Transcriptor`
-- **Windows:** `Y:\Mi software\Transcriptor`
+- **Windows (canónica, edición+commit):** `Y:\Mi software\Transcriptor` (es un NAS SMB)
+- **Windows (copia local de build):** `D:\Software mio\Transcriptor` — disco local.
+  **Nuitka NO puede compilar sobre el NAS** (crashea con `OSError [Errno 22]` al
+  mover los GB de torch por SMB). Compilar SIEMPRE desde la copia D: (rápido).
+  Sincronizar Y:→D: con `git push local <rama>` antes de compilar. Detalles y
+  setup del `.venv` de D: en `SESSION_HANDOFF.md`.
 
 ## 6. Instrucción del proyecto:
 
