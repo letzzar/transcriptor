@@ -17,6 +17,7 @@ insignia de pyannote 4.x; la 4.x lo usa internamente aunque se pida la "3.1").
 
 from __future__ import annotations
 
+import os
 import wave
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -27,6 +28,17 @@ from transcriptor.platform_info import has_cuda
 
 if TYPE_CHECKING:
     import torch
+
+# Telemetría de pyannote DESACTIVADA. Esto es una app de auditoría legal: no se
+# envía ningún dato a terceros. pyannote.audio 4.x inicializa su telemetría
+# (exporter OTLP) al importarse y la gobierna esta variable de entorno, así que
+# debe fijarse ANTES de cualquier `import pyannote` (lo hacemos en load()).
+os.environ["PYANNOTE_METRICS_ENABLED"] = "false"
+
+# En el bundle Nuitka, `importlib.metadata` no encuentra los metadatos de
+# pyannote.audio, así que su comprobación de dependencias falla ("not installed")
+# aunque la librería SÍ está. Saltamos esa comprobación: la versión es correcta.
+os.environ["PYANNOTE_SKIP_DEPENDENCY_CHECK"] = "1"
 
 DEFAULT_MODEL = "pyannote/speaker-diarization-community-1"
 

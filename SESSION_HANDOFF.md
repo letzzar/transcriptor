@@ -32,12 +32,74 @@ los 8 imports (src + smokes) + docs (CLAUDE.md, PROYECTO.md). ruff + mypy (31) +
 - `--windows-console-mode=disable` → exe sin consola; para depurar el arranque,
   compilar temporalmente con `=force` para ver el traceback (así se cazó el bug).
 
+### Iteración 2 — el exe arranca pero falla al transcribir (data-file + telemetría)
+El Director probó el `.exe`: arranca, pero al transcribir todos los archivos daban
+`No such file or directory: ...\pyannote\audio\telemetry\config.yaml`.
+- Causa: `pyannote/audio/telemetry/metrics.py` lee `config.yaml` (relativo a
+  `__file__`) **al importar**, y monta un exporter OTLP que **envía telemetría**.
+  No estaba en el bundle.
+- **Fix privacidad** (app de auditoría legal): `pipeline/diarization.py` fija
+  `os.environ["PYANNOTE_METRICS_ENABLED"]="false"` ANTES de importar pyannote →
+  no se envía telemetría. (El `config.yaml` se lee igual al importar, así que
+  hay que empaquetarlo también.)
+- **Fix empaquetado**: rebuild con `--include-package-data` para pyannote +
+  faster_whisper + lightning_fabric + pytorch_lightning + asteroid_filterbanks
+  (añadido al `build_windows.bat`). speechbrain NO está instalado (no incluir).
+- **Rebuild en curso** con ambos fixes. Tras él, el Director re-prueba a transcribir.
+
+### Iteración 3 — metadatos de pyannote + el build se cuelga en el NAS
+- Tras empaquetar `config.yaml`, al transcribir: `Pipeline requires pyannote.audio
+  ~ 4.0.0 but it is not installed`. Causa: en el bundle `importlib.metadata` no
+  ve los metadatos. Fix parcial: `PYANNOTE_SKIP_DEPENDENCY_CHECK=1` en
+  `diarization.py` (validado en caliente con la var de entorno → saltó esa
+  comprobación). Pero apareció otra: `No package metadata was found for
+  pyannote.audio`. Fix real: empaquetar los `.dist-info` con
+  `--include-distribution-metadata` (añadido al `build_windows.bat`).
+- Nombres de distribución corregidos (Nuitka avisó): `pyannote-database`,
+  `pyannote-metrics`, `pyannote-pipeline` (con guion); `pyannote.audio` y
+  `pyannote.core` van con punto.
+
+### PROBLEMA DE INFRAESTRUCTURA — no compilar en el NAS
+El build #4 **crasheó** (confirmado en `nuitka-crash-report.xml`):
+`OSError: [Errno 22] Invalid argument`, escribiendo en **`Y:` =
+`\\LETNAS\Software` (SMB)**. Errno 22 sobre SMB = el NAS rechaza una operación de
+archivo de Nuitka (mueve ~7 GB de torch). Los builds 1–3 colaron de chiripa.
+**REGLA: compilar SIEMPRE con salida a disco local** (`--output-dir=C:\...`).
+C: tiene 735 GB libres.
+
+### Cómo retomar y CERRAR F8 (build en local)
+Desde el venv activo, con salida a C: (clave para que no se cuelgue):
+```
+cd /d "Y:\Mi software\Transcriptor"
+.venv\Scripts\activate
+python -m nuitka --standalone --assume-yes-for-downloads --enable-plugin=pyside6 ^
+  --windows-console-mode=disable ^
+  --windows-icon-from-ico=src\transcriptor\resources\logo_app.ico ^
+  --company-name=letzzar --product-name=Transcriptor ^
+  --file-version=0.2.0 --product-version=0.2.0 ^
+  --include-package=transcriptor --include-package-data=transcriptor ^
+  --include-package-data=pyannote --include-package-data=faster_whisper ^
+  --include-package-data=lightning_fabric --include-package-data=pytorch_lightning ^
+  --include-package-data=asteroid_filterbanks ^
+  --include-distribution-metadata=pyannote.audio ^
+  --include-distribution-metadata=pyannote.core ^
+  --include-distribution-metadata=pyannote-database ^
+  --include-distribution-metadata=pyannote-metrics ^
+  --include-distribution-metadata=pyannote-pipeline ^
+  --include-distribution-metadata=lightning ^
+  --include-distribution-metadata=pytorch-lightning ^
+  --output-dir=C:\TranscriptorBuild --output-filename=Transcriptor.exe ^
+  src\transcriptor\__main__.py
+```
+Salida: `C:\TranscriptorBuild\__main__.dist\Transcriptor.exe`. Luego probar a
+transcribir; si falla la transcripción (faster_whisper/ctranslate2), añadir su
+`--include-package-data` / metadata e iterar (en local, rápido).
+NOTA: el `build_windows.bat` aún apunta `--output-dir=dist` (en Y:); cambiarlo a
+una ruta local antes de usarlo en serio.
+
 ### Pendiente F8
-- Confirmar que el exe arranca tras el rename.
-- Posibles iteraciones por data-files de runtime (pyannote/lightning configs) que
-  solo fallan al usar la app empaquetada.
+- Ejecutar el build en local y confirmar que el `.exe` **transcribe** entero.
 - `.app`/`.icns` de Mac → en sesión Mac.
-- Sin commitear: F8 (scripts + rename). Commitear cuando el exe arranque.
 
 ---
 
