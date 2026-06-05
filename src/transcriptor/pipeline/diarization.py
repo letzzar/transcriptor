@@ -30,13 +30,6 @@ from transcriptor.platform_info import has_cuda
 if TYPE_CHECKING:
     import torch
 
-# matplotlib en modo headless (Agg) ANTES de importar pyannote. En el bundle
-# Nuitka el plugin de matplotlib fuerza el backend 'qtagg', cuya inicialización
-# dispara imports dinámicos de estilos/plotting (p. ej. 'scienceplots') que no
-# están empaquetados → "No module named ...". No ploteamos nada, así que Agg
-# evita toda esa maquinaria (en dev ya corre headless; esto lo replica en el bundle).
-os.environ.setdefault("MPLBACKEND", "Agg")
-
 # Telemetría de pyannote DESACTIVADA. Esto es una app de auditoría legal: no se
 # envía ningún dato a terceros. pyannote.audio 4.x inicializa su telemetría
 # (exporter OTLP) al importarse y la gobierna esta variable de entorno, así que
@@ -54,14 +47,20 @@ os.environ["PYANNOTE_SKIP_DEPENDENCY_CHECK"] = "1"
 # vez de romper (solo se usa para mostrar la versión; lo funcional ya está
 # cubierto arriba). En entorno normal devuelve la versión real (el try acierta).
 def _safe_metadata_version(distribution_name: str) -> str:
-    # Usa `distribution()` (de más bajo nivel), NO `version()`, para que aunque
-    # este parche se aplique más de una vez nunca recurse sobre sí mismo
-    # (capturar y llamar al `version()` original causaba StackOverflow en el
-    # bundle, donde el módulo se reejecuta y el "original" ya era el parche).
+    # Usa `distribution()` (de más bajo nivel), NO `version()`, para no recursar
+    # sobre sí mismo (capturar/llamar al `version()` original daba StackOverflow).
     try:
         return importlib.metadata.distribution(distribution_name).version
     except importlib.metadata.PackageNotFoundError:
-        return "4.0.4" if "pyannote" in distribution_name else "0.0.0"
+        # SOLO falseamos `pyannote-audio` (su __init__ pide su versión al
+        # importarse y en el bundle no hay .dist-info). Para CUALQUIER otro
+        # paquete RELANZAMOS: devolver una versión falsa engañaba a los checks
+        # de disponibilidad de lightning/torchmetrics (p. ej.
+        # `_SCIENCEPLOT_AVAILABLE`), que entonces importaban módulos opcionales
+        # NO instalados (scienceplots, librosa, …) → cascada "No module named".
+        if "pyannote" in distribution_name:
+            return "4.0.4"
+        raise
 
 
 importlib.metadata.version = _safe_metadata_version
