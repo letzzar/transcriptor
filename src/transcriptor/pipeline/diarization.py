@@ -17,6 +17,7 @@ insignia de pyannote 4.x; la 4.x lo usa internamente aunque se pida la "3.1").
 
 from __future__ import annotations
 
+import importlib.metadata
 import os
 import wave
 from pathlib import Path
@@ -39,6 +40,23 @@ os.environ["PYANNOTE_METRICS_ENABLED"] = "false"
 # pyannote.audio, así que su comprobación de dependencias falla ("not installed")
 # aunque la librería SÍ está. Saltamos esa comprobación: la versión es correcta.
 os.environ["PYANNOTE_SKIP_DEPENDENCY_CHECK"] = "1"
+
+# Además, `pyannote/audio/__init__.py` hace `importlib.metadata.version(
+# "pyannote-audio")` AL IMPORTARSE, y en el bundle Nuitka no hay `.dist-info`
+# → `PackageNotFoundError`. Parcheamos `version()` para devolver un valor en
+# vez de romper (solo se usa para mostrar la versión; lo funcional ya está
+# cubierto arriba). En entorno normal devuelve la versión real (el try acierta).
+_original_metadata_version = importlib.metadata.version
+
+
+def _safe_metadata_version(distribution_name: str) -> str:
+    try:
+        return _original_metadata_version(distribution_name)
+    except importlib.metadata.PackageNotFoundError:
+        return "4.0.4" if "pyannote" in distribution_name else "0.0.0"
+
+
+importlib.metadata.version = _safe_metadata_version
 
 DEFAULT_MODEL = "pyannote/speaker-diarization-community-1"
 
