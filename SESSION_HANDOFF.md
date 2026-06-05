@@ -4,6 +4,74 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
+## ✅ F8 — BUILD WINDOWS COMPLETADO (Python 3.13 + salida a archivo real)
+
+**El `.exe` se compila y arranca.** `D:\Software mio\Transcriptor\dist\__main__.dist\Transcriptor.exe`
+(1.3 GB, 10645 archivos). Pendiente: confirmar la transcripción dentro del bundle
+(prueba interactiva del Director).
+
+**Dos causas raíz resueltas (las que costaron ~10 h):**
+1. **Python 3.14 era experimental en Nuitka** → deadlock de scons en el linking.
+   FIX: recrear el venv de D: con **Python 3.13** (soportado). Instalado en
+   `C:\Users\letzz\AppData\Local\Programs\Python\Python313\`.
+2. **El pipe de salida del harness** rompía el stderr de Nuitka → `OSError
+   [Errno 22]` al imprimir un log (en el "data composer"). FIX: lanzar el build
+   como **proceso detached con salida a archivos reales**:
+   `Start-Process ... -RedirectStandardOutput build_out.log -RedirectStandardError build_err.log -WindowStyle Hidden`.
+   (Bonus: el detached sobrevive a reinicios de Claude.)
+
+**NO era** ni el NAS ni MAX_PATH (eso se descartó). El `OSError [Errno 22]` del NAS
+SÍ era SMB, pero el del build local era el pipe — dos cosas distintas con el mismo errno.
+
+**Receta de build que FUNCIONA (desde D:, venv 3.13):**
+`python -m nuitka --standalone --assume-yes-for-downloads --enable-plugin=pyside6
+--windows-console-mode=disable --windows-icon-from-ico=... --include-package=transcriptor
+--include-package-data=transcriptor --include-package-data=pyannote
+--include-package-data=faster_whisper --include-package-data=lightning_fabric
+--include-package-data=pytorch_lightning --include-package-data=asteroid_filterbanks
+--include-distribution-metadata=pyannote-audio --output-dir=dist
+--output-filename=Transcriptor.exe src\transcriptor\__main__.py`
+Lanzar SIEMPRE detached con salida a archivo (no por el pipe del harness).
+`build_windows.bat` (commit 0d85a1b) refleja las flags; falta cambiarlo para
+salida a archivo y dejar claro venv 3.13.
+
+**Pendiente:** confirmar transcripción en el bundle; si faster_whisper/ctranslate2
+pide algo, añadir su data/metadata y recompilar (en D:, 3.13). `.app` Mac → F8 Mac.
+
+---
+
+## (Histórico) ACCIÓN REQUERIDA: REINICIAR WINDOWS, luego venv Python 3.13
+
+**Situación:** un build de Nuitka se colgó toda la noche (deadlock de scons:
+compiló 6319 `.obj` y se quedó muerto 8 h). Causa: **Python 3.14 es solo
+experimental en Nuitka 4.1.2**. Al matar los procesos zombie (decenas de
+`conhost`/compiladores), el sistema quedó **sin recursos** (desktop heap/handles
+agotados): PowerShell y Bash ya **no pueden crear procesos**
+(`fork: Resource temporarily unavailable`, `0xC0000142`).
+
+**→ REINICIAR WINDOWS** (la máquina, no Claude) para limpiar los recursos fugados.
+
+**Decisión tomada (Director):** recrear el venv en **Python 3.13** + seguir con Nuitka.
+
+**Plan post-reinicio (en orden):**
+1. Verificar/instalar **Python 3.13** (antes solo había 3.14 y 3.10 en la máquina;
+   instalar con `winget install Python.Python.3.13` si falta).
+2. Borrar artefactos del build 3.14 en D: (`D:\Software mio\Transcriptor\dist`
+   con `__main__.build`/`__main__.dist`) — son objetos de 3.14, inservibles.
+3. Recrear el venv de D: con 3.13:
+   `py -3.13 -m venv "D:\Software mio\Transcriptor\.venv"` (borrar el .venv 3.14
+   primero). Instalar deps: `pip install -e .` + `faster-whisper torch
+   pyannote.audio fpdf2 tinytag keyring nuitka` (o desde un nuevo `pip freeze`;
+   OJO: las wheels cp313 se re-descargan, no están en caché cp314).
+4. Verificar: `python -m transcriptor` (offscreen), `pytest -q`.
+5. Compilar EN D: con el comando del `build_windows.bat` (solo metadata
+   `pyannote-audio`). Output local. Ya NO debería colgarse (3.13 soportado).
+6. Probar a transcribir en el `.exe`.
+
+Todo el código está commiteado (Y:, rama `feat/f3-f4-f6`, `0d85a1b`). Nada perdido.
+
+---
+
 ## ⚡ ESTADO AL REINICIAR (Claude update) — leer esto primero
 
 **Última acción:** compilando el `.exe` en la copia local **D:** (Nuitka, en
