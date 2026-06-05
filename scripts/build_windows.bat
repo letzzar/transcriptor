@@ -39,7 +39,7 @@ python -m nuitka ^
   --include-package-data=lightning_fabric ^
   --include-package-data=pytorch_lightning ^
   --include-package-data=asteroid_filterbanks ^
-  --include-distribution-metadata=pyannote-audio ^
+  --include-module=scienceplots ^
   --output-dir=dist ^
   --output-filename=Transcriptor.exe ^
   src\transcriptor\__main__.py

@@ -25,6 +25,9 @@ engines = [
     "faster-whisper>=1.0",
     "pyannote.audio>=3.3",
     "torch>=2.3",
+    # Estilo matplotlib que el bundle Nuitka acaba importando dinámicamente vía
+    # pyannote/matplotlib. Necesario para empaquetar (en runtime normal es inocuo).
+    "scienceplots",
 ]
 mlx = [
     "mlx-whisper>=0.4 ; sys_platform == 'darwin' and platform_machine == 'arm64'",

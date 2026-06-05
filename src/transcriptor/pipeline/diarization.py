@@ -30,6 +30,13 @@ from transcriptor.platform_info import has_cuda
 if TYPE_CHECKING:
     import torch
 
+# matplotlib en modo headless (Agg) ANTES de importar pyannote. En el bundle
+# Nuitka el plugin de matplotlib fuerza el backend 'qtagg', cuya inicialización
+# dispara imports dinámicos de estilos/plotting (p. ej. 'scienceplots') que no
+# están empaquetados → "No module named ...". No ploteamos nada, así que Agg
+# evita toda esa maquinaria (en dev ya corre headless; esto lo replica en el bundle).
+os.environ.setdefault("MPLBACKEND", "Agg")
+
 # Telemetría de pyannote DESACTIVADA. Esto es una app de auditoría legal: no se
 # envía ningún dato a terceros. pyannote.audio 4.x inicializa su telemetría
 # (exporter OTLP) al importarse y la gobierna esta variable de entorno, así que
