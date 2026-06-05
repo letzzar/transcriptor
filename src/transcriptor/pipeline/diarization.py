@@ -46,12 +46,13 @@ os.environ["PYANNOTE_SKIP_DEPENDENCY_CHECK"] = "1"
 # → `PackageNotFoundError`. Parcheamos `version()` para devolver un valor en
 # vez de romper (solo se usa para mostrar la versión; lo funcional ya está
 # cubierto arriba). En entorno normal devuelve la versión real (el try acierta).
-_original_metadata_version = importlib.metadata.version
-
-
 def _safe_metadata_version(distribution_name: str) -> str:
+    # Usa `distribution()` (de más bajo nivel), NO `version()`, para que aunque
+    # este parche se aplique más de una vez nunca recurse sobre sí mismo
+    # (capturar y llamar al `version()` original causaba StackOverflow en el
+    # bundle, donde el módulo se reejecuta y el "original" ya era el parche).
     try:
-        return _original_metadata_version(distribution_name)
+        return importlib.metadata.distribution(distribution_name).version
     except importlib.metadata.PackageNotFoundError:
         return "4.0.4" if "pyannote" in distribution_name else "0.0.0"
 
