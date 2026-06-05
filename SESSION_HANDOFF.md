@@ -4,6 +4,26 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
+## ⚠️ LECCIÓN CLAVE F8 — el parche de metadata NO debe falsear paquetes ajenos
+
+Tras el build, el `.exe` daba un goteo eterno de `No module named X`
+(scienceplots → librosa → torchvision → regex → torch_fidelity → …). **NO era
+que faltaran deps.** Era **autoinfligido**: el monkeypatch de
+`importlib.metadata.version` en `diarization.py` devolvía una versión falsa
+(`"0.0.0"`) para CUALQUIER paquete ausente. Eso engañaba a los checks de
+disponibilidad de torchmetrics/lightning (p. ej. `torchmetrics/utilities/plot.py`
+`if _SCIENCEPLOT_AVAILABLE: import scienceplots`), que entonces importaban
+módulos OPCIONALES no instalados → ModuleNotFoundError en cascada.
+
+**FIX (commit de7d3d3):** el parche SOLO falsea `pyannote-audio` (su `__init__`
+pide su versión al importarse y en el bundle no hay `.dist-info`); para el resto
+**relanza** `PackageNotFoundError`. Verificado con `_capture_imports.py` en venv
+MÍNIMO: el pipeline corre entero, sin una sola dep extra (la lista TOPMODULES no
+incluye scienceplots/librosa/transformers/…).
+
+NO instalar scienceplots/librosa/torchvision/transformers/speechbrain: eran
+síntomas, no necesidades. El venv de D: se recreó limpio desde el freeze.
+
 ## ✅ F8 — BUILD WINDOWS COMPLETADO (Python 3.13 + salida a archivo real)
 
 **El `.exe` se compila y arranca.** `D:\Software mio\Transcriptor\dist\__main__.dist\Transcriptor.exe`
