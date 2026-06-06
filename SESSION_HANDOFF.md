@@ -4,7 +4,36 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
-## ⚡ AL REINICIAR — leer esto primero (estado a 2026-06-06)
+## ✅ ESTADO ACTUAL — PyInstaller + 2 funciones nuevas (leer esto primero)
+
+**Empaquetado migrado de Nuitka a PyInstaller.** Nuitka compila a C y rompía la
+introspección de frames de Lightning (`save_hyperparameters` → `KeyError:
+'sample_rate'`), entre otros choques. PyInstaller NO compila → la app transcribe.
+**El `.exe` de PyInstaller TRANSCRIBE OK** (confirmado por el Director).
+
+- **Build:** `scripts/build_windows.bat` (= `pyinstaller --noconfirm
+  scripts/transcriptor.spec`). Ejecutar desde la copia **D:** (disco local),
+  nunca el NAS. Salida: `dist/Transcriptor/Transcriptor.exe`. ~4–8 min.
+- **venv D:** Python 3.13 (con transformers, instalado para el género).
+- **Limpieza hecha:** quitados scripts/deps/docs de Nuitka, restos de dist y
+  caché de Nuitka, temporales de diagnóstico.
+
+**2 funciones nuevas añadidas (commits `4d84e2d`, `b9dc859`):**
+1. **Auto-detectar hablantes** (`max_speakers=None`): checkbox "Auto-detectar
+   hablantes" (por defecto) → etiqueta TODOS los detectados (Voz 1..N).
+2. **Género por voz** (`pipeline/gender.py`): modelo wav2vec2
+   `alefiury/wav2vec2-xlsr-gender` por hablante → "Voz N (probable hombre/mujer)".
+   Checkbox "Estimar género de las voces" (por defecto). Dep: transformers.
+   Validado en dev (JFK→hombre; llamadas reales coinciden, confirmado Director).
+
+**Pendiente:** que el Director pruebe AMBAS funciones en el `.exe` recién
+construido. Luego: `console=False` ya está en la spec; falta Mac `.app` (sesión Mac).
+
+**Las notas de Nuitka más abajo son HISTÓRICAS** (la saga de F8 con Nuitka).
+
+---
+
+## (Histórico) ⚡ AL REINICIAR — estado a 2026-06-06 (build Nuitka)
 
 **Esperando el resultado de la prueba de transcripción del Director en el `.exe`.**
 
