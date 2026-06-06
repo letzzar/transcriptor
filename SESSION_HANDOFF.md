@@ -4,6 +4,36 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
+## ⚡ AL REINICIAR — leer esto primero (estado a 2026-06-06)
+
+**Esperando el resultado de la prueba de transcripción del Director en el `.exe`.**
+
+- **Build Windows hecho y arranca**: `D:\Software mio\Transcriptor\dist\__main__.dist\Transcriptor.exe`
+  (567 MB exe, 1.3 GB dist). Sale del venv 3.13 LIMPIO + parche de metadata
+  narrowed (commit `de7d3d3`). Verificado que el pipeline corre entero en dev.
+- **Git**: Y: canónica `1f6d063`, D: sincronizada, rama `feat/f3-f4-f6`, solo local.
+
+**Cuando vuelva el Director con el resultado:**
+- **Si transcribe OK** → F8 Windows CERRADO. Tareas de cierre:
+  1. Limpiar temporales en D: (`_capture_imports.py`, `cap_full.log`,
+     `exe_stderr.txt`, `exe_stdout.txt`, `build_out.log`, `build_err.log`).
+  2. `git push local`/`nas` para dejar ambas copias iguales.
+  3. Empaquetado Mac (`.app`/`.icns`) → sesión Mac.
+- **Si da un error NUEVO** → diagnosticar la causa REAL (leer la traza completa).
+  **NO** falsear metadata de paquetes ajenos NI instalar deps a ciegas (ver la
+  LECCIÓN de abajo: eso creó la cascada). El venv mínimo ya tiene todo lo necesario.
+
+**Receta de build que FUNCIONA** (desde D:, venv 3.13, NUNCA desde el NAS):
+lanzar Nuitka **detached con salida a archivos reales** (no el pipe del harness,
+que rompe stderr con `Errno 22`):
+`Start-Process .venv\Scripts\python.exe -ArgumentList @('-m','nuitka',...flags...)
+-RedirectStandardOutput build_out.log -RedirectStandardError build_err.log -WindowStyle Hidden`.
+Flags exactas en `scripts/build_windows.bat` (commit actual; sin scienceplots,
+sin --include-distribution-metadata). El watcher debe esperar al EXE, no a python==0
+(scons deja 0 procesos un instante entre fases → falso positivo).
+
+---
+
 ## ⚠️ LECCIÓN CLAVE F8 — el parche de metadata NO debe falsear paquetes ajenos
 
 Tras el build, el `.exe` daba un goteo eterno de `No module named X`
