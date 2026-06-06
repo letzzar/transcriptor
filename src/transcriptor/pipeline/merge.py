@@ -47,8 +47,12 @@ def _speaker_durations(turns: list[Turn]) -> dict[str, float]:
     return durations
 
 
-def top_speakers(turns: list[Turn], max_speakers: int) -> list[str]:
-    """Hablantes principales por tiempo de habla, hasta `max_speakers`."""
+def top_speakers(turns: list[Turn], max_speakers: int | None) -> list[str]:
+    """Hablantes principales por tiempo de habla, hasta `max_speakers`.
+
+    `max_speakers=None` → modo automático: devuelve TODOS los hablantes que la
+    diarización detectó (sin tope), ordenados por tiempo de habla.
+    """
     ordered = sorted(_speaker_durations(turns).items(), key=lambda kv: kv[1], reverse=True)
     return [spk for spk, _ in ordered[:max_speakers]]
 
@@ -71,14 +75,16 @@ def _best_speaker(start: float, end: float, turns: list[Turn]) -> str | None:
 def assign_speakers(
     segments: list[Segment],
     turns: list[Turn],
-    max_speakers: int,
+    max_speakers: int | None,
 ) -> list[LabeledSegment]:
     """Etiqueta cada segmento con su hablante para el informe.
 
     - El hablante con más solape gana el segmento.
-    - Solo los `max_speakers` con más tiempo de habla reciben "Voz N", numerados
-      por orden de aparición en la transcripción.
-    - Un hablante real pero fuera del top → `MINOR_SPEAKER`.
+    - `max_speakers=None` (automático): TODOS los hablantes detectados reciben
+      "Voz N" (no hay tope ni "voz menor").
+    - Con un entero: solo los `max_speakers` con más tiempo de habla reciben
+      "Voz N" (numerados por orden de aparición); un hablante real fuera del top
+      → `MINOR_SPEAKER`.
     - Sin solape con ningún turno → `UNKNOWN_SPEAKER`.
     """
     principals = top_speakers(turns, max_speakers)

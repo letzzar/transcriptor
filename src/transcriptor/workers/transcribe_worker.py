@@ -49,7 +49,7 @@ class TranscribeWorker(QThread):
         folder: Path,
         *,
         model_id: str,
-        max_speakers: int,
+        max_speakers: int | None,
         enhance: bool,
         language: str | None,
         parent: QObject | None = None,

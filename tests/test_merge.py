@@ -56,6 +56,19 @@ def test_sin_turnos_todo_desconocido() -> None:
     assert out[0].speaker == UNKNOWN_SPEAKER
 
 
+def test_auto_etiqueta_todos_los_hablantes() -> None:
+    # max_speakers=None (auto): los 3 hablantes reciben "Voz N", ninguno es menor.
+    turns = [
+        Turn("A", 0.0, 30.0),
+        Turn("B", 30.0, 50.0),
+        Turn("C", 50.0, 52.0),  # con max=2 seria interferencia; en auto es Voz 3
+    ]
+    segments = [_seg(0.0, 29.0), _seg(31.0, 49.0), _seg(50.5, 51.5)]
+    out = assign_speakers(segments, turns, max_speakers=None)
+    assert [s.speaker for s in out] == ["Voz 1", "Voz 2", "Voz 3"]
+    assert MINOR_SPEAKER not in [s.speaker for s in out]
+
+
 def test_top_speakers_ordena_por_duracion() -> None:
     turns = [
         Turn("A", 0.0, 5.0),    # 5 s

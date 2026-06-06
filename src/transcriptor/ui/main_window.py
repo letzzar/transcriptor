@@ -97,10 +97,16 @@ class MainWindow(QMainWindow):
 
         # Hablantes + limpieza
         opts_row = QHBoxLayout()
-        opts_row.addWidget(QLabel("Máx. hablantes:"))
+        self.chk_auto_speakers = QPushButton("Auto-detectar hablantes")
+        self.chk_auto_speakers.setCheckable(True)
+        self.chk_auto_speakers.setChecked(True)
+        self.chk_auto_speakers.toggled.connect(self._on_auto_speakers_toggled)
+        opts_row.addWidget(self.chk_auto_speakers)
+        opts_row.addWidget(QLabel("Máx.:"))
         self.spin_speakers = QSpinBox()
         self.spin_speakers.setRange(2, 5)
         self.spin_speakers.setValue(2)
+        self.spin_speakers.setEnabled(False)  # deshabilitado mientras Auto está activo
         opts_row.addWidget(self.spin_speakers)
         opts_row.addSpacing(20)
         self.chk_clean = QPushButton("Limpiar audio (FFmpeg)")
@@ -215,11 +221,17 @@ class MainWindow(QMainWindow):
         self.btn_folder.setEnabled(not running)
         self.btn_manage.setEnabled(not running)
         self.cmb_model.setEnabled(not running and self.cmb_model.count() > 0)
-        self.spin_speakers.setEnabled(not running)
+        self.chk_auto_speakers.setEnabled(not running)
+        self.spin_speakers.setEnabled(not running and not self.chk_auto_speakers.isChecked())
         self.chk_clean.setEnabled(not running)
         self.btn_cancel.setVisible(running)
 
     # ----------------------------------------------------------------- slots
+
+    def _on_auto_speakers_toggled(self, checked: bool) -> None:
+        # En modo Auto, el nº de hablantes lo decide la diarización; deshabilita
+        # el límite manual.
+        self.spin_speakers.setEnabled(not checked)
 
     def _select_folder(self) -> None:
         start = str(self._folder) if self._folder else ""
@@ -258,10 +270,12 @@ class MainWindow(QMainWindow):
             self.btn_logs.setChecked(True)
         self.progress.setValue(0)
 
+        # Auto → None (la diarización decide); manual → el tope del spinbox.
+        max_speakers = None if self.chk_auto_speakers.isChecked() else self.spin_speakers.value()
         worker = TranscribeWorker(
             self._folder,
             model_id=model_id,
-            max_speakers=self.spin_speakers.value(),
+            max_speakers=max_speakers,
             enhance=self.chk_clean.isChecked(),
             language=None if language == "auto" else language,
             parent=self,
