@@ -56,6 +56,15 @@ def test_sin_turnos_todo_desconocido() -> None:
     assert out[0].speaker == UNKNOWN_SPEAKER
 
 
+def test_genero_se_anade_a_la_etiqueta() -> None:
+    turns = [Turn("A", 0.0, 10.0), Turn("B", 10.0, 20.0)]
+    segments = [_seg(0.0, 9.0), _seg(11.0, 19.0)]
+    genders = {"A": "probable hombre", "B": "probable mujer"}
+    out = assign_speakers(segments, turns, max_speakers=None, genders=genders)
+    assert out[0].speaker == "Voz 1 (probable hombre)"
+    assert out[1].speaker == "Voz 2 (probable mujer)"
+
+
 def test_auto_etiqueta_todos_los_hablantes() -> None:
     # max_speakers=None (auto): los 3 hablantes reciben "Voz N", ninguno es menor.
     turns = [

@@ -20,7 +20,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QThread, Signal
 
 from transcriptor.engines import make_engine
-from transcriptor.pipeline import audio, hashing, merge
+from transcriptor.pipeline import audio, gender, hashing, merge
 from transcriptor.pipeline.diarization import DiarizationError, Diarizer
 from transcriptor.report import txt
 
@@ -52,6 +52,7 @@ class TranscribeWorker(QThread):
         max_speakers: int | None,
         enhance: bool,
         language: str | None,
+        detect_gender: bool = False,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -60,6 +61,7 @@ class TranscribeWorker(QThread):
         self._max_speakers = max_speakers
         self._enhance = enhance
         self._language = language
+        self._detect_gender = detect_gender
 
     def _audio_files(self) -> list[Path]:
         return sorted(
@@ -79,6 +81,7 @@ class TranscribeWorker(QThread):
             self.log.emit(f"{len(files)} archivo(s) a procesar con modelo '{self._model_id}'.")
             engine = make_engine(self._model_id)
             diarizer = Diarizer()
+            gender_clf = gender.GenderClassifier() if self._detect_gender else None
             entries: list[txt.SummaryEntry] = []
             total = len(files)
 
@@ -86,7 +89,7 @@ class TranscribeWorker(QThread):
                 if self.isInterruptionRequested():
                     self.log.emit("Cancelado por el usuario.")
                     break
-                self._process_one(f, engine, diarizer, entries, first=(i == 0))
+                self._process_one(f, engine, diarizer, gender_clf, entries, first=(i == 0))
                 self.progress.emit(int((i + 1) * 100 / total))
 
             if entries:
@@ -102,6 +105,7 @@ class TranscribeWorker(QThread):
         f: Path,
         engine: object,
         diarizer: Diarizer,
+        gender_clf: gender.GenderClassifier | None,
         entries: list[txt.SummaryEntry],
         *,
         first: bool,
@@ -136,13 +140,23 @@ class TranscribeWorker(QThread):
             segments = list(engine.transcribe(wav, language=self._language))  # type: ignore[attr-defined]
             language = segments[0].language if segments and segments[0].language else "?"
 
-            # Asignación de hablantes.
+            # Estimación de género (opcional) + asignación de hablantes.
             if turns is None:
                 labeled = [
                     merge.LabeledSegment(s.start, s.end, s.text, "Voz 1") for s in segments
                 ]
             else:
-                labeled = merge.assign_speakers(segments, turns, self._max_speakers)
+                genders: dict[str, str] | None = None
+                if gender_clf is not None:
+                    self.status.emit("Estimando género de las voces…")
+                    raw = gender.classify_speakers(wav, turns, gender_clf)
+                    genders = {spk: f"probable {label}" for spk, (label, _conf) in raw.items()}
+                    if genders:
+                        self.log.emit(
+                            f"[{f.name}] Género estimado: "
+                            + ", ".join(f"{s}={g}" for s, g in genders.items())
+                        )
+                labeled = merge.assign_speakers(segments, turns, self._max_speakers, genders)
 
             content = txt.render_analysis(
                 source_name=f.name,

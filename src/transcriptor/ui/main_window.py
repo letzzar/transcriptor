@@ -112,6 +112,14 @@ class MainWindow(QMainWindow):
         self.chk_clean = QPushButton("Limpiar audio (FFmpeg)")
         self.chk_clean.setCheckable(True)
         opts_row.addWidget(self.chk_clean)
+        self.chk_gender = QPushButton("Estimar género de las voces")
+        self.chk_gender.setCheckable(True)
+        self.chk_gender.setChecked(True)
+        self.chk_gender.setToolTip(
+            "Estima el género de cada voz con un modelo (descarga ~1 GB la 1ª vez). "
+            "Es una estimación; se etiqueta como 'probable'."
+        )
+        opts_row.addWidget(self.chk_gender)
         opts_row.addStretch()
         layout.addLayout(opts_row)
 
@@ -224,6 +232,7 @@ class MainWindow(QMainWindow):
         self.chk_auto_speakers.setEnabled(not running)
         self.spin_speakers.setEnabled(not running and not self.chk_auto_speakers.isChecked())
         self.chk_clean.setEnabled(not running)
+        self.chk_gender.setEnabled(not running)
         self.btn_cancel.setVisible(running)
 
     # ----------------------------------------------------------------- slots
@@ -278,6 +287,7 @@ class MainWindow(QMainWindow):
             max_speakers=max_speakers,
             enhance=self.chk_clean.isChecked(),
             language=None if language == "auto" else language,
+            detect_gender=self.chk_gender.isChecked(),
             parent=self,
         )
         worker.status.connect(self.lbl_status.setText)

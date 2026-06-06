@@ -76,6 +76,7 @@ def assign_speakers(
     segments: list[Segment],
     turns: list[Turn],
     max_speakers: int | None,
+    genders: dict[str, str] | None = None,
 ) -> list[LabeledSegment]:
     """Etiqueta cada segmento con su hablante para el informe.
 
@@ -86,6 +87,8 @@ def assign_speakers(
       "Voz N" (numerados por orden de aparición); un hablante real fuera del top
       → `MINOR_SPEAKER`.
     - Sin solape con ningún turno → `UNKNOWN_SPEAKER`.
+    - `genders` (opcional): {speaker_id: "probable mujer"} → se añade a la
+      etiqueta, p. ej. "Voz 1 (probable mujer)".
     """
     principals = top_speakers(turns, max_speakers)
     label_map: dict[str, str] = {}
@@ -97,7 +100,10 @@ def assign_speakers(
             display = UNKNOWN_SPEAKER
         elif best in principals:
             if best not in label_map:
-                label_map[best] = f"Voz {len(label_map) + 1}"
+                label = f"Voz {len(label_map) + 1}"
+                if genders and best in genders:
+                    label += f" ({genders[best]})"
+                label_map[best] = label
             display = label_map[best]
         else:
             display = MINOR_SPEAKER
