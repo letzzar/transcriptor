@@ -33,6 +33,7 @@ python -m nuitka ^
   --file-version=0.2.0 ^
   --product-version=0.2.0 ^
   --include-package=transcriptor ^
+  --include-package=pyannote.audio ^
   --include-package-data=transcriptor ^
   --include-package-data=pyannote ^
   --include-package-data=faster_whisper ^
