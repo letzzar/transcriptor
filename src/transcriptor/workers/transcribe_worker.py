@@ -163,6 +163,10 @@ class TranscribeWorker(QThread):
             self.log.emit(f"[{f.name}] Generado {out.name} ({len(labeled)} segmentos).")
             self.file_done.emit(str(out))
         except Exception as e:  # noqa: BLE001 — error de un archivo; seguimos con el resto
-            self.log.emit(f"[{f.name}] ERROR: {e}")
+            import traceback
+
+            self.log.emit(
+                f"[{f.name}] ERROR: {type(e).__name__}: {e}\n{traceback.format_exc()}"
+            )
         finally:
             wav.unlink(missing_ok=True)
