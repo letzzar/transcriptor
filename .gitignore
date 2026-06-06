@@ -4,7 +4,6 @@ build/
 dist/
 __pycache__/
 *.pyc
-*.spec
 *.exe
 *.egg-info/
 .mypy_cache/
