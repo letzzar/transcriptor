@@ -42,8 +42,7 @@ dev = [
     "pytest>=8",
     "ruff>=0.6",
     "mypy>=1.10",
-    "nuitka>=2.4",
-    "imageio",
+    "pyinstaller>=6.0",
 ]
 
 [project.scripts]

@@ -36,7 +36,7 @@ Aplicación de escritorio multiplataforma (Windows y macOS) para transcribir y a
 | Motor Whisper macOS Apple Silicon | **mlx-whisper** | 3-5× más rápido que faster-whisper en M1-M4 y menos RAM. |
 | Motor Whisper resto | **faster-whisper** | Mejor rendimiento CTranslate2 en CUDA y CPU x86. |
 | Diarización | **pyannote.audio 4.x** (modelo `pyannote/speaker-diarization-community-1`) | Único modelo open con calidad razonable hoy. Se adoptó la 4.x en F4 (wheels para Python 3.14). La 4.x usa internamente `speaker-diarization-community-1` (gated, requiere aceptación aparte) aunque se pida la "3.1". |
-| Empaquetado | **Nuitka** | Compila Python a binario nativo. Ejecutable más pequeño y arranque más rápido que alternativas. Decisión del Director (ver `CLAUDE.md` §6). |
+| Empaquetado | **PyInstaller** (onedir) | Se decidió Nuitka inicialmente, pero Nuitka compila a C y rompe la introspección de frames de Lightning (`save_hyperparameters` → `KeyError`), entre otros choques con la stack ML. PyInstaller NO compila (empaqueta intérprete + `.pyc`), así que pyannote/Lightning funcionan. Estándar de facto para apps torch. Spec en `scripts/transcriptor.spec`. |
 | Settings | **QSettings** + **`keyring`** | Settings normales en QSettings; secretos en keyring. |
 | Threading | **QThread + signals** | Pattern Qt idiomático; no bloquea la UI. |
 
@@ -44,7 +44,7 @@ Aplicación de escritorio multiplataforma (Windows y macOS) para transcribir y a
 
 ```
 transcriptor/
-├── pyproject.toml             # Nuitka + deps
+├── pyproject.toml             # deps + extras por fase
 ├── src/transcriptor/
 │   ├── __main__.py            # Entry point
 │   ├── app.py                 # QApplication + bootstrap
@@ -93,11 +93,10 @@ tinytag>=2.0
 ffmpeg-python>=0.2            # opcional, wrapper
 
 # Dev
-nuitka>=2.4
+pyinstaller>=6.0
 pytest>=8
 ruff>=0.6
 mypy>=1.10
-imageio                       # requerido por Nuitka para iconos
 ```
 
 ### FFmpeg
@@ -221,56 +220,36 @@ Regla: **ningún cálculo en el hilo de UI**.
 
 ## 11. Empaquetado
 
-### Nuitka
+### PyInstaller (onedir)
 
-Compilamos a binario nativo con Nuitka. Plugin de PySide6 obligatorio. Stdlib y dependencias se incluyen con `--standalone`. Se distribuye en bundle: `.app` en macOS y carpeta + instalador en Windows.
-
-#### Build macOS (Apple Silicon + Intel)
-
-```bash
-python -m nuitka \
-  --standalone \
-  --macos-create-app-bundle \
-  --macos-app-icon=src/transcriptor/resources/logo_app.icns \
-  --macos-app-name=Transcriptor \
-  --macos-app-version=0.2.0 \
-  --macos-signed-app-name=com.letzzar.transcriptor \
-  --enable-plugin=pyside6 \
-  --include-package=transcriptor \
-  --include-package-data=pyannote \
-  --include-package-data=faster_whisper \
-  --include-package-data=mlx_whisper \
-  --output-dir=dist \
-  src/transcriptor/__main__.py
-```
-
-Para universal binary (arm64 + x86_64), añadir `--macos-target-arch=universal`. Ojo: si se incluye `mlx-whisper`, debe ser solo arm64 (MLX no soporta x86_64).
+Empaquetamos con PyInstaller (NO compila a C, por eso funciona la introspección
+de Lightning/pyannote que Nuitka rompía). El bundle es una carpeta `dist/<App>/`
+con el `.exe` + `_internal/`. PySide6, torch, etc. los resuelven los hooks de
+PyInstaller; pyannote/transformers/lightning se fuerzan con `collect_all`, y los
+metadatos con `copy_metadata`.
 
 #### Build Windows
 
-```bash
-python -m nuitka ^
-  --standalone ^
-  --windows-icon-from-ico=logo_app.ico ^
-  --windows-console-mode=disable ^
-  --windows-company-name=letzzar ^
-  --windows-product-name=Transcriptor ^
-  --windows-file-version=0.2.0 ^
-  --enable-plugin=pyside6 ^
-  --include-package=transcriptor ^
-  --include-package-data=pyannote ^
-  --include-package-data=faster_whisper ^
-  --output-dir=dist ^
-  src\transcriptor\__main__.py
+Desde la **copia local D:** (nunca el NAS), con el venv activo:
 ```
+scripts\build_windows.bat        REM = pyinstaller --noconfirm scripts\transcriptor.spec
+```
+Salida: `dist\Transcriptor\Transcriptor.exe`. La spec (`scripts/transcriptor.spec`)
+hace: `copy_metadata` de pyannote.audio/transformers + `collect_all` de
+pyannote.audio, faster_whisper, lightning, torchmetrics, asteroid_filterbanks,
+transformers; `--add-data` de `resources/`; `console=False`; icono.
 
-Recomendado añadir `--lto=yes` y `--jobs=N` para acelerar.
+#### Build macOS
+
+Mismo enfoque con PyInstaller (`--windowed` → `.app`, icono `.icns`). Se hará en
+la sesión Mac (pendiente). En Mac ARM el motor es MLX (mlx-whisper).
 
 #### Scripts de build
 
 Bajo `scripts/`:
-- `build_macos.sh` — build + creación de `.dmg` con `create-dmg` o `hdiutil`.
-- `build_windows.bat` — build + instalador con Inno Setup (`scripts/installer.iss`).
+- `transcriptor.spec` — spec de PyInstaller (build canónico).
+- `build_windows.bat` — ejecuta PyInstaller con la spec.
+- `installer.iss` — instalador con Inno Setup a partir de `dist\Transcriptor`.
 
 #### Tamaño
 
@@ -285,7 +264,7 @@ Alternativa: un único instalador que descargue torch+CUDA al primer arranque de
 
 #### Firma
 
-- **macOS**: firmar con `codesign` usando Developer ID y notarizar con `notarytool`. Nuitka acepta firmar al final pasando `--macos-signed-app-name` + ejecución manual de `codesign --deep --force --options runtime --sign ...`.
+- **macOS**: firmar el `.app` con `codesign` usando Developer ID y notarizar con `notarytool` (`codesign --deep --force --options runtime --sign ...`).
 - **Windows**: firmar el `.exe` resultante con `signtool` y certificado de code signing (opcional, evita SmartScreen).
 
 ## 12. Roadmap
@@ -300,7 +279,7 @@ Alternativa: un único instalador que descargue torch+CUDA al primer arranque de
 | **F5 — Gestor de modelos** | Descargar/eliminar con progreso. |
 | **F6 — Reporte PDF** | fpdf2 con UTF-8 (fuente DejaVu embebida). |
 | **F7 — Tema + pulido UX** | Light/dark, atajos, mensajes de error humanos. |
-| **F8 — Nuitka** | Builds `.app` y `.exe` con Nuitka, scripts `build_macos.sh` / `build_windows.bat`, firmas. |
+| **F8 — Empaquetado** | Builds `.app` y `.exe` con PyInstaller, `scripts/transcriptor.spec` / `build_windows.bat`, instalador, firmas. |
 
 ## 13. Cambios respecto al prototipo
 
@@ -313,7 +292,7 @@ Alternativa: un único instalador que descargue torch+CUDA al primer arranque de
 | PDF en `latin-1` con `'replace'` | PDF UTF-8 con fuente embebida (DejaVu Sans) |
 | `HF_TOKEN` en env var | Diálogo Settings + keyring |
 | Bug `max_ovl, speaker = spk` | Corregido |
-| Sin `requirements.txt` | `pyproject.toml` + scripts de build con Nuitka |
+| Sin `requirements.txt` | `pyproject.toml` + scripts de build con PyInstaller |
 | Solo `faster-whisper` | MLX en Mac ARM, faster-whisper en el resto |
 | Hardcoded "Windows Edition" en el título | Título neutral, indicador dinámico del motor |
 

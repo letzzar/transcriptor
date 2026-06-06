@@ -1,7 +1,7 @@
 ; Instalador de Transcriptor para Windows (Inno Setup 6).
 ;
-; Requiere haber compilado antes con scripts\build_windows.bat, que deja la
-; carpeta standalone en dist\__main__.dist\.
+; Requiere haber compilado antes con scripts\build_windows.bat (PyInstaller),
+; que deja la carpeta onedir en dist\Transcriptor\.
 ;
 ; Compilar el instalador:  iscc scripts\installer.iss
 ; Salida:  dist\Transcriptor-Setup.exe
@@ -9,7 +9,7 @@
 #define AppName "Transcriptor"
 #define AppVersion "0.2.0"
 #define AppPublisher "letzzar"
-#define DistDir "..\dist\__main__.dist"
+#define DistDir "..\dist\Transcriptor"
 
 [Setup]
 AppName={#AppName}

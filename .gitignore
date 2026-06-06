@@ -21,9 +21,10 @@ Thumbs.db
 # Modelos descargados (caché HF)
 .cache/
 
-# Artefactos de build Nuitka
-nuitka-crash-report.xml
-*.build/
+# Artefactos de build PyInstaller (build/ y dist/ ya están arriba)
+*.manifest
+_test_*.py
+_capture_imports.py
 
 # Logs y reportes generados por el prototipo
 _AUDITORIA_LOG.txt

@@ -75,10 +75,10 @@ Rutas según plataforma:
 - **Mac:** `/Volumes/Software/Mi\ software/Transcriptor`
 - **Windows (canónica, edición+commit):** `Y:\Mi software\Transcriptor` (es un NAS SMB)
 - **Windows (copia local de build):** `D:\Software mio\Transcriptor` — disco local.
-  **Nuitka NO puede compilar sobre el NAS** (crashea con `OSError [Errno 22]` al
-  mover los GB de torch por SMB). Compilar SIEMPRE desde la copia D: (rápido).
-  Sincronizar Y:→D: con `git push local <rama>` antes de compilar. Detalles y
-  setup del `.venv` de D: en `SESSION_HANDOFF.md`.
+  **Empaquetar SIEMPRE desde la copia D:** (disco local, rápido), NUNCA sobre el
+  NAS por SMB. Sincronizar Y:→D: con `git push local <rama>` antes de compilar.
+  Build: `scripts\build_windows.bat` (PyInstaller). El `.venv` de D: es Python 3.13.
+  Detalles en `SESSION_HANDOFF.md`.
 
 ## 6. Instrucción del proyecto:
 
@@ -86,7 +86,7 @@ Rol y Dinámica
 Actúa como un Desarrollador Senior, experto en interfaces gráficas, concurrencia y buenas prácticas del lenguaje. Yo actuaré como el Director del Proyecto. Yo tomaré las decisiones de producto, flujo de usuario y arquitectura general; tú te encargarás de la implementación técnica, la escritura del código y la resolución de errores.
 
 Contexto del Proyecto
-Estamos mejorando una aplicación de transcrición de audio, preparando una versión de escritorio de la app, con interfaz QT y compilado con Nuitka. La app debe detectar el sistema sobre el que esta corriendo, descargar la mejor version de Whisper para ese sistema, ofreciendo las versiones recomendadas en un listado, solicitar la carpeta donde estan los audios, transcribirlos y crear informes de transcripción. Es para auditorias legales de audios.
+Estamos mejorando una aplicación de transcrición de audio, preparando una versión de escritorio de la app, con interfaz QT y empaquetada con PyInstaller. La app debe detectar el sistema sobre el que esta corriendo, descargar la mejor version de Whisper para ese sistema, ofreciendo las versiones recomendadas en un listado, solicitar la carpeta donde estan los audios, transcribirlos y crear informes de transcripción. Es para auditorias legales de audios.
 
 Diseño base del proyecto:
 Leer archivo, `PROYECTO.md` proponer los cambios necesarios si hiciera falta.
@@ -116,7 +116,7 @@ La especificación completa está en `PROYECTO.md`. Léelo siempre antes de empe
 | Tema | Decisión |
 |---|---|
 | GUI | **PySide6** (no PyQt6, no Tkinter) |
-| Empaquetado | **Nuitka** (`--standalone --enable-plugin=pyside6` + bundle `.app` en Mac, `.exe` en Win) |
+| Empaquetado | **PyInstaller** (onedir; `scripts/transcriptor.spec`). Se cambió de Nuitka: Nuitka compila a C y rompe la introspección de frames de Lightning (`save_hyperparameters`); PyInstaller no compila → la app transcribe. |
 | Motor Whisper macOS Apple Silicon (arm64) | **mlx-whisper** con modelos `mlx-community/whisper-*` |
 | Motor Whisper macOS Intel + Windows | **faster-whisper** (CUDA float16 si hay NVIDIA, CPU int8 si no) |
 | Diarización | **pyannote.audio 3.1** |
@@ -130,7 +130,7 @@ La especificación completa está en `PROYECTO.md`. Léelo siempre antes de empe
 src/transcriptor/
 ├── __main__.py
 ├── app.py                  # QApplication bootstrap
-├── platform_info.py        # detect_os, detect_gpu, detect_engine → "mlx" | "faster-cuda" | "faster-cpu" (NO "platform.py": colisiona con la stdlib en bundles Nuitka)
+├── platform_info.py        # detect_os, detect_gpu, detect_engine → "mlx" | "faster-cuda" | "faster-cpu" (NO "platform.py": no usar nombres de la stdlib)
 ├── config.py               # QSettings + keyring
 ├── models/{registry,downloader}.py
 ├── engines/{base,mlx_engine,faster_engine}.py
