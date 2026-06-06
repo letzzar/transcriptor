@@ -4,12 +4,25 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
-## ✅ ESTADO ACTUAL — PyInstaller + 2 funciones nuevas (leer esto primero)
+## ✅ ESTADO ACTUAL — F8 Windows CERRADO (PyInstaller) + 2 funciones nuevas OK
+
+**TODO FUNCIONA EN EL `.exe`** (confirmado por el Director, 2026-06-06):
+transcribe, diariza, auto-detecta hablantes y estima género. F8 Windows hecho.
 
 **Empaquetado migrado de Nuitka a PyInstaller.** Nuitka compila a C y rompía la
 introspección de frames de Lightning (`save_hyperparameters` → `KeyError:
-'sample_rate'`), entre otros choques. PyInstaller NO compila → la app transcribe.
-**El `.exe` de PyInstaller TRANSCRIBE OK** (confirmado por el Director).
+'sample_rate'`), entre otros choques. PyInstaller NO compila → la app funciona.
+
+**Fixes del bundle PyInstaller (todos commiteados):**
+- `pipeline/diarization.py`: parche de `importlib.metadata.version` — falsea
+  pyannote-audio; para el resto, si el módulo ESTÁ instalado pero sin `.dist-info`
+  (caso torchcodec, que transformers consulta sin try) devuelve versión ficticia;
+  si NO está instalado, relanza (sin recrear la cascada de "No module named …").
+  Telemetría pyannote off + skip-dep-check (privacidad/bundle).
+- `scripts/transcriptor.spec`: build canónico. Rutas vía `SPECPATH`. `copy_metadata`
+  de pyannote.audio + transformers; `collect_all` de pyannote.audio, faster_whisper,
+  lightning, torchmetrics, asteroid_filterbanks, transformers. `console=False`.
+- Genero/transcripción tolerantes a fallos (un fallo no pierde el archivo).
 
 - **Build:** `scripts/build_windows.bat` (= `pyinstaller --noconfirm
   scripts/transcriptor.spec`). Ejecutar desde la copia **D:** (disco local),
