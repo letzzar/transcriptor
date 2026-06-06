@@ -8,9 +8,15 @@
 # PyInstaller no compila a C (a diferencia de Nuitka), asi que la introspeccion
 # de Lightning/pyannote (save_hyperparameters) funciona y la app transcribe.
 
+import os
+
 from PyInstaller.utils.hooks import collect_all, copy_metadata
 
-datas = [('src/transcriptor/resources', 'transcriptor/resources')]
+# SPECPATH = carpeta del spec (scripts/). La raiz del repo es su padre. Asi el
+# build funciona se ejecute desde donde se ejecute.
+ROOT = os.path.dirname(SPECPATH)
+
+datas = [(os.path.join(ROOT, 'src/transcriptor/resources'), 'transcriptor/resources')]
 binaries = []
 hiddenimports = []
 
@@ -27,8 +33,8 @@ for pkg in ('pyannote.audio', 'faster_whisper', 'lightning', 'torchmetrics',
     hiddenimports += pkg_hidden
 
 a = Analysis(
-    ['src/transcriptor/__main__.py'],
-    pathex=['src'],
+    [os.path.join(ROOT, 'src/transcriptor/__main__.py')],
+    pathex=[os.path.join(ROOT, 'src')],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
@@ -57,7 +63,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['src/transcriptor/resources/logo_app.ico'],
+    icon=[os.path.join(ROOT, 'src/transcriptor/resources/logo_app.ico')],
 )
 coll = COLLECT(
     exe,
