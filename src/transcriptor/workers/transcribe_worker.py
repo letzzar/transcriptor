@@ -148,13 +148,22 @@ class TranscribeWorker(QThread):
             else:
                 genders: dict[str, str] | None = None
                 if gender_clf is not None:
-                    self.status.emit("Estimando género de las voces…")
-                    raw = gender.classify_speakers(wav, turns, gender_clf)
-                    genders = {spk: f"probable {label}" for spk, (label, _conf) in raw.items()}
-                    if genders:
+                    try:
+                        self.status.emit("Estimando género de las voces…")
+                        raw = gender.classify_speakers(wav, turns, gender_clf)
+                        genders = {
+                            spk: f"probable {label}" for spk, (label, _conf) in raw.items()
+                        }
+                        if genders:
+                            self.log.emit(
+                                f"[{f.name}] Género estimado: "
+                                + ", ".join(f"{s}={g}" for s, g in genders.items())
+                            )
+                    except Exception as e:  # noqa: BLE001 — el género es opcional
+                        genders = None
                         self.log.emit(
-                            f"[{f.name}] Género estimado: "
-                            + ", ".join(f"{s}={g}" for s, g in genders.items())
+                            f"[{f.name}] AVISO: estimación de género no disponible "
+                            f"({type(e).__name__}: {e})."
                         )
                 labeled = merge.assign_speakers(segments, turns, self._max_speakers, genders)
 

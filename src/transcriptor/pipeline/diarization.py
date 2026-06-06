@@ -18,6 +18,7 @@ insignia de pyannote 4.x; la 4.x lo usa internamente aunque se pida la "3.1").
 from __future__ import annotations
 
 import importlib.metadata
+import importlib.util
 import os
 import wave
 from pathlib import Path
@@ -52,14 +53,21 @@ def _safe_metadata_version(distribution_name: str) -> str:
     try:
         return importlib.metadata.distribution(distribution_name).version
     except importlib.metadata.PackageNotFoundError:
-        # SOLO falseamos `pyannote-audio` (su __init__ pide su versión al
-        # importarse y en el bundle no hay .dist-info). Para CUALQUIER otro
-        # paquete RELANZAMOS: devolver una versión falsa engañaba a los checks
-        # de disponibilidad de lightning/torchmetrics (p. ej.
-        # `_SCIENCEPLOT_AVAILABLE`), que entonces importaban módulos opcionales
-        # NO instalados (scienceplots, librosa, …) → cascada "No module named".
         if "pyannote" in distribution_name:
             return "4.0.4"
+        # En el bundle PyInstaller, algunos paquetes INSTALADOS no llevan su
+        # .dist-info (p. ej. torchcodec, que transformers consulta sin try). Si
+        # el módulo EXISTE de verdad, devolvemos una versión ficticia; si NO
+        # existe, relanzamos, para no engañar a los checks de disponibilidad de
+        # lightning/torchmetrics (que importarían módulos opcionales ausentes →
+        # cascada "No module named scienceplots/…").
+        module = distribution_name.replace("-", "_")
+        try:
+            installed = importlib.util.find_spec(module) is not None
+        except (ImportError, ValueError):
+            installed = False
+        if installed:
+            return "0.0.0"
         raise
 
 
