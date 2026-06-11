@@ -4,6 +4,89 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
+## 🟢 EN CURSO (2026-06-11) — Opción C: instalador thin + backend auto-descargable (CPU/CUDA)
+
+**Objetivo (decisión del Director):** instalador pequeño que, en el PRIMER
+arranque, detecta la GPU y descarga el backend pesado adaptado (torch CUDA o
+CPU). Reproduce la experiencia real del cliente. NO se empaqueta torch en el
+`.exe` (antes ~2.5 GB; ahora bundle 332 MB, instalador **105 MB**).
+
+### Estado: pipeline funciona hasta diarización; falta confirmar transcripción
+En la máquina del Director (Windows + **GTX 1070 Ti**, tarjeta de PRUEBA; la real
+es una **RTX 3080**) el `.exe` ya: arranca, descarga el backend cu126, carga
+pyannote/torch, y **diariza de verdad** (confirmado: "95 turnos, 2 hablantes").
+**Último build (20:24) pendiente de probar por el Director**: arregla el último
+error (compute_type float16 en Pascal). Si transcribe → Opción C cerrada.
+
+### Arquitectura Opción C
+- **Bundle thin** (`scripts/transcriptor.spec`): PySide6 + nuestro código +
+  **Python embebido** (`_internal/python/`, copia de cp313). Excluye el stack
+  pesado (torch, faster_whisper, pyannote, transformers, lightning…).
+- **`src/transcriptor/runtime/provision.py`**: en 1er arranque crea un **venv** en
+  `%LOCALAPPDATA%\Transcriptor\backend\py313\venv` (con el Python embebido) e
+  instala con pip: torch desde el índice **cu126** (GPU) o cpu, + faster-whisper
+  ==1.2.1, pyannote.audio==4.0.4, transformers==5.10.2 (VERSIONES FIJADAS = lo
+  probado en dev). Marcador `.provisioned` con esquema (`_BACKEND_SCHEMA=3`):
+  si cambia, reinstala. `activate()` añade el site-packages del venv a sys.path.
+- **`runtime/ffmpeg_setup.py` + `workers/ffmpeg_worker.py`**: al arrancar, si no
+  hay FFmpeg, ofrece instalarlo con `winget install -e --id Gyan.FFmpeg`; si no,
+  abre ffmpeg.org. Recarga PATH del registro tras instalar.
+- **`ui/first_run.py` + `workers/provision_worker.py`**: asistente de 1er arranque
+  (progreso + log) que llama a `provision()`.
+- **Build:** `scripts/build_windows.bat` copia el Python embebido (robocopy) y
+  corre PyInstaller. **Instalador:** `iscc scripts\installer.iss` →
+  `dist\Transcriptor-Setup.exe` (por-usuario, `PrivilegesRequired=lowest`).
+
+### Cadena de bugs resuelta esta sesión (el bundle thin destapa lo que el stack
+### pesado antes ocultaba). TODOS verificados (incl. `--selftest` en el `.exe`):
+1. **keyring `NoKeyringError`** → backend dinámico no congelado. Fix: `collect_all`
+   de `keyring` + `win32ctypes` en la spec.
+2. **`'NoneType' has no attribute 'write'`** (descarga modelo) → en `--windowed`
+   `sys.stdout/stderr` son None. Fix: redirigir a `os.devnull` en `__main__.py`.
+3. **pyannote `ImportError: cannot import Pipeline`** → pip instalaba pyannote
+   "latest" (sin pin) incompatible. Fix: fijar versiones + índice cu126 (pyannote
+   4.0.4 exige torch>=2.8; cu124 topa en 2.6).
+4. **Re-descarga todo / no comprueba existentes** → era `pip --target --upgrade`.
+   Fix: usar un **venv** (pip lleva registro, instala incremental).
+5. **`venvlauncher.exe` no encontrado** (`python -m venv`) → robocopy excluía
+   `/XD Scripts` y casaba `Lib\venv\scripts\nt`. Fix: quitar `Scripts` de la
+   exclusión.
+6. **`No module named 'cProfile'`** → PyInstaller solo congela la stdlib que usa
+   NUESTRO código; el backend externo pide más. Fix: `activate()` añade la stdlib
+   del Python embebido como fallback en sys.path.
+7. **`No module named 'tqdm.contrib.logging'`** → paquete compartido (tqdm)
+   congelado PARCIAL ensombrece la copia completa del venv. Fix (cierra la clase):
+   **finder venv-first** en `sys.meta_path` (`_install_venv_importer`) → todo
+   paquete del venv se carga del venv; + import diferido de `MainWindow` en
+   `app.py` para que el finder esté activo antes.
+8. **`ValueError: Requested float16 ... do not support efficient float16`** →
+   Pascal (1070 Ti) no hace FP16 eficiente y CTranslate2 lo rechaza. Fix:
+   `faster_engine._resolve_compute_type` → `"auto"` en CUDA (CTranslate2 elige:
+   float16 en Ampere/3080, int8/float32 en Pascal). **← último, a confirmar.**
+
+### Validación sin GPU: modo `--selftest`
+`Transcriptor.exe --selftest` (oculto, en `app.py`) activa el backend y prueba la
+cadena de imports que fallaba, escribiendo a `%TEMP%\transcriptor_selftest.txt`.
+Resultado en el `.exe` (backend CPU): `tqdm.contrib.logging OK / pyannote.audio.
+Pipeline OK / SELFTEST OK`. Útil para validar futuros builds sin GPU.
+
+### Iconos
+Logo nuevo del Director (`logo_app.png/.xcf` en la raíz). Generados con Pillow:
+`resources/logo_app.ico` (multi-resolución 16–256) y `resources/logo_app.icns`
+(1024², para el `.app` Mac; refinable con iconutil). `package-data` incluye .icns.
+
+### PENDIENTE
+- **Director: probar el build 20:24** (¿transcribe los `_ANALIZADO.txt` con
+  hablantes + género en la 1070 Ti?). Si sí → Opción C cerrada.
+- **SIN COMMITEAR**: toda la tanda Opción C está en el working tree (rama
+  `feat/f3-f4-f6`), sin commit. Commitear cuando el Director confirme.
+- **3080**: confirmar float16/Tensor Cores (más rápido que Pascal).
+- **Mac `.app`**: sesión Mac (PyInstaller --windowed + .icns).
+- Backend del Director ya descargado en `%LOCALAPPDATA%` (esquema 3): reinstalar
+  el `.exe` NO re-descarga.
+
+---
+
 ## ✅ ESTADO ACTUAL — F8 Windows CERRADO (PyInstaller) + 2 funciones nuevas OK
 
 **TODO FUNCIONA EN EL `.exe`** (confirmado por el Director, 2026-06-06):

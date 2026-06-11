@@ -53,7 +53,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 # Recursos en runtime: fuentes DejaVu (PDF UTF-8) e icono de la app.
-transcriptor = ["resources/fonts/*.ttf", "resources/*.ico"]
+transcriptor = ["resources/fonts/*.ttf", "resources/*.ico", "resources/*.icns"]
 
 [tool.ruff]
 line-length = 100

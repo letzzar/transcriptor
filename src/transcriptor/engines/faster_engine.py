@@ -52,7 +52,10 @@ class FasterEngine:
     def _resolve_compute_type(self, device: str) -> str:
         if self._compute_type != "auto":
             return self._compute_type
-        return "float16" if device == "cuda" else "int8"
+        # En CUDA dejamos que CTranslate2 elija el tipo más rápido SOPORTADO por
+        # la GPU ("auto"): float16 en Ampere+ (Tensor Cores), int8/float32 en
+        # Pascal (1070 Ti), que no hace float16 eficiente y lo rechaza con error.
+        return "auto" if device == "cuda" else "int8"
 
     def ensure_model(self) -> Path:
         """Descarga el modelo si no está y guarda la ruta local al snapshot."""

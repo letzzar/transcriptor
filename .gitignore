@@ -2,6 +2,7 @@ venv/
 .venv/
 build/
 dist/
+scripts/embedded_python/
 __pycache__/
 *.pyc
 *.exe
