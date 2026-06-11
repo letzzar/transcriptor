@@ -4,7 +4,62 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
-## 🟢 EN CURSO (2026-06-11) — Opción C: instalador thin + backend auto-descargable (CPU/CUDA)
+## 🟢 EN CURSO (2026-06-11, tarde) — Género mejorado + instalador OFFLINE (CPU+CUDA, todo incluido)
+
+**Confirmado por el Director:** la transcripción **con GPU funciona en la 1070 Ti**
+(Opción C cerrada en lo funcional).
+
+### 1) Mejora de detección de género (commit `cc25a5e`)
+El modelo wav2vec2 clasificaba **hombres como mujeres en audio telefónico** (banda
+~300-3400 Hz, sin la fundamental masculina). Dos arreglos en `pipeline/gender.py`
++ `workers/transcribe_worker.py`:
+- El género se estima SIEMPRE sobre audio **sin filtrar** (el `highpass=200` de la
+  mejora borraba la fundamental masculina y sesgaba a "mujer").
+- `estimate_f0()` pasó de autocorrelación a **cepstrum** (detecta el espaciado entre
+  armónicos, sobrevive a la pérdida de fundamental) y usa el **percentil 25**.
+  `_combine()` corrige al modelo si el F0 es concluyente (≤175 Hz hombre, ≥200 Hz
+  mujer) y devuelve **"género indeterminado"** si ni F0 ni modelo (conf<0.85) son
+  fiables. Validado en `Y:\test`: **3/3 hablantes correctos** (antes 1/3).
+
+### 2) Dos instaladores Windows
+- **Online (thin):** `dist\Transcriptor-Setup.exe` (**105 MB**). Descarga el backend
+  en el 1er arranque (Opción C de siempre). `scripts\installer.iss`.
+- **OFFLINE (100% todo incluido):** `dist\Transcriptor-Setup-Offline.exe`. NO descarga
+  nada. Empaqueta: wheelhouse (**torch cpu+cu126** + faster-whisper 1.2.1 + pyannote
+  4.0.4 + transformers 5.10.2 + deps, 104 wheels/variante), **modelos HF** (Whisper
+  large-v3-turbo, diarización pyannote community-1 + segmentation-3.0, género wav2vec2)
+  y **ffmpeg.exe**. Commits `90e3ac3` + `928e9e8`.
+
+**Cómo funciona el offline** (todo no-op en la build online/dev):
+- `runtime/provision.py`: helpers `offline_wheelhouse/offline_hf_cache/is_offline_bundle/
+  configure_offline`. `provision()` instala desde `{app}\wheels\<variante>` con
+  `--no-index --find-links` (1er arranque crea el venv local sin red).
+- `app.py`: `configure_offline()` al inicio → `HF_HOME={app}\hf_cache` + `HF_HUB_OFFLINE=1`
+  + `TRANSFORMERS_OFFLINE=1`.
+- `main_window.py` / `diarization.py`: **no se exige token HF** en build offline.
+- `pipeline/audio.py`: `find_ffmpeg()` también busca junto al exe.
+- `ui/first_run.py`: textos "Instalar" (sin descarga) en modo offline.
+
+**Build del offline:** `scripts\build_offline.ps1` (descarga wheelhouse cpu+cu126,
+copia modelos de la caché HF, copia ffmpeg, compila con `scripts\installer_offline.iss`).
+Flags `-SkipWheels`/`-SkipModels` para reusar artefactos. Payload en
+`dist\offline_payload\` (NO commitear; son ~5,7 GB).
+
+**De-riesgado antes de empaquetar:** verificado que (a) los 3 modelos cargan 100%
+offline sin token (`HF_HUB_OFFLINE=1`) y (b) el wheelhouse resuelve completo en venv
+limpio con `--no-index` (exit 0, versiones = stack validado, incl. cu126).
+
+### PENDIENTE
+- **Director: probar `Transcriptor-Setup-Offline.exe`** en una máquina (idealmente sin
+  internet y con/sin GPU) → 1er arranque crea el venv desde wheels y transcribe sin red.
+- **Licencia pyannote:** el modelo de diarización es *gated*; redistribuirlo en el
+  instalador es decisión del Director (asumida para sus peritajes). Anotado aquí.
+- El instalador offline deja `{app}\wheels` en disco tras provisionar (no se borra);
+  optimizable si molesta el espacio.
+
+---
+
+## ✅ (2026-06-11) — Opción C: instalador thin + backend auto-descargable (CPU/CUDA)
 
 **Objetivo (decisión del Director):** instalador pequeño que, en el PRIMER
 arranque, detecta la GPU y descarga el backend pesado adaptado (torch CUDA o
