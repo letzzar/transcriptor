@@ -42,13 +42,23 @@ class FirstRunDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
+        self._offline = provision.offline_wheelhouse() is not None
         variant = "CUDA (GPU NVIDIA)" if self._gpu else "CPU"
-        intro = QLabel(
-            "La primera vez, Transcriptor descarga su motor de transcripción "
-            "adaptado a tu equipo.<br><br>"
-            f"Equipo detectado: <b>{variant}</b>.<br>"
-            "Descarga aproximada: ~2 GB. Solo ocurre una vez."
-        )
+        if self._offline:
+            intro = QLabel(
+                "La primera vez, Transcriptor prepara su motor de transcripción "
+                "adaptado a tu equipo, desde los componentes ya incluidos (sin "
+                "internet).<br><br>"
+                f"Equipo detectado: <b>{variant}</b>.<br>"
+                "Solo ocurre una vez."
+            )
+        else:
+            intro = QLabel(
+                "La primera vez, Transcriptor descarga su motor de transcripción "
+                "adaptado a tu equipo.<br><br>"
+                f"Equipo detectado: <b>{variant}</b>.<br>"
+                "Descarga aproximada: ~2 GB. Solo ocurre una vez."
+            )
         intro.setTextFormat(Qt.TextFormat.RichText)
         intro.setWordWrap(True)
         layout.addWidget(intro)
@@ -64,7 +74,7 @@ class FirstRunDialog(QDialog):
 
         buttons = QHBoxLayout()
         self.btn_cancel = QPushButton("Cancelar")
-        self.btn_install = QPushButton("Descargar e instalar")
+        self.btn_install = QPushButton("Instalar" if self._offline else "Descargar e instalar")
         self.btn_install.setDefault(True)
         buttons.addStretch(1)
         buttons.addWidget(self.btn_cancel)
@@ -85,7 +95,7 @@ class FirstRunDialog(QDialog):
         self.btn_install.setEnabled(False)
         self.btn_cancel.setEnabled(False)
         self.progress.setRange(0, 0)  # indeterminado mientras instala
-        self._append("Iniciando descarga…")
+        self._append("Preparando el motor…" if self._offline else "Iniciando descarga…")
 
         worker = ProvisionWorker(gpu=self._gpu, parent=self)
         worker.log.connect(self._append)

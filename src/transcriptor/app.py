@@ -18,6 +18,10 @@ from transcriptor.workers.ffmpeg_worker import FfmpegInstallWorker
 
 def main() -> int:
     """Punto de entrada de la app. Devuelve el código de salida del event loop."""
+    # Instalador offline: enruta HF a los modelos empaquetados y corta la red.
+    # Debe ir lo primero, antes de cualquier import de transformers/huggingface.
+    provision.configure_offline()
+
     # Identidad de la app para QSettings (usaremos esto en F1).
     QCoreApplication.setOrganizationName("letzzar")
     QCoreApplication.setOrganizationDomain("letzzar.com")

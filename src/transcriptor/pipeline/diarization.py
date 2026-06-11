@@ -121,8 +121,11 @@ class Diarizer:
         import torch
         from pyannote.audio import Pipeline
 
+        # En la build offline el modelo va empaquetado y se carga sin red ni token.
+        from transcriptor.runtime import provision
+
         token = config.get_hf_token()
-        if not token:
+        if not token and not provision.is_offline_bundle():
             raise DiarizationError(
                 "Falta el token de HuggingFace. Configúralo en Preferencias para "
                 "poder identificar los hablantes."

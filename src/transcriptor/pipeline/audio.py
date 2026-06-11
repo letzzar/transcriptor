@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -38,9 +39,14 @@ def find_ffmpeg() -> str | None:
         return found
 
     name = "ffmpeg.exe" if is_windows() else "ffmpeg"
-    local = Path.cwd() / name
-    if local.exists():
-        return str(local)
+    # Junto al ejecutable (FFmpeg empaquetado en el instalador offline) y en el cwd.
+    candidates = []
+    if getattr(sys, "frozen", False):
+        candidates.append(Path(sys.executable).parent / name)
+    candidates.append(Path.cwd() / name)
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
     return None
 
 

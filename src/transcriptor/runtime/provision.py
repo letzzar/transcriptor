@@ -117,6 +117,52 @@ def embedded_python_exe() -> str:
     return sys.executable
 
 
+def _bundle_dir() -> Path | None:
+    """Carpeta de instalación (junto al exe) en el bundle, o None en desarrollo.
+
+    `TRANSCRIPTOR_BUNDLE` permite simular el modo offline sin empaquetar.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    env = os.environ.get("TRANSCRIPTOR_BUNDLE")
+    return Path(env) if env else None
+
+
+def offline_wheelhouse() -> Path | None:
+    """Wheelhouse offline (`wheels/`) junto al exe, o None (build online/dev)."""
+    base = _bundle_dir()
+    if base is not None and (base / "wheels").is_dir():
+        return base / "wheels"
+    return None
+
+
+def offline_hf_cache() -> Path | None:
+    """Caché de modelos HF empaquetada (`hf_cache/`) junto al exe, o None."""
+    base = _bundle_dir()
+    if base is not None and (base / "hf_cache").is_dir():
+        return base / "hf_cache"
+    return None
+
+
+def is_offline_bundle() -> bool:
+    """True si esta build trae los modelos HF empaquetados (instalador offline)."""
+    return offline_hf_cache() is not None
+
+
+def configure_offline() -> None:
+    """Si hay modelos empaquetados, enruta HF a la caché local y corta la red.
+
+    Idempotente. Debe llamarse MUY temprano (antes de importar transformers /
+    huggingface_hub / pyannote). No-op en la build online o en desarrollo.
+    """
+    cache = offline_hf_cache()
+    if cache is None:
+        return
+    os.environ.setdefault("HF_HOME", str(cache))
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
+
 def _read_marker() -> tuple[str, int] | None:
     """Lee el marcador como `(variante, esquema)`, o None si falta/no coincide.
 
@@ -212,11 +258,21 @@ def provision(
 
     pip_base = [str(_venv_python()), "-m", "pip", "install", "--only-binary=:all:"]
 
-    # 1) torch desde el índice CUDA/CPU correcto. El venv registra lo instalado.
-    _run([*pip_base, "--index-url", torch_index, "torch"], on_line)
-    # 2) el resto desde PyPI: el resolver del venv ve torch ya instalado y lo
-    #    respeta (satisface torch>=2.8 de pyannote sin re-descargarlo).
-    _run([*pip_base, *BACKEND_PACKAGES], on_line)
+    wheelhouse = offline_wheelhouse()
+    if wheelhouse is not None:
+        # Offline: todos los wheels (torch de la variante + motores + deps) están
+        # empaquetados. Sin red: pip resuelve solo desde la carpeta local.
+        _run(
+            [*pip_base, "--no-index", "--find-links", str(wheelhouse / variant),
+             "torch", *BACKEND_PACKAGES],
+            on_line,
+        )
+    else:
+        # Online: 1) torch desde el índice CUDA/CPU correcto (el venv lo registra);
+        # 2) el resto desde PyPI, que ve torch ya instalado y lo respeta (satisface
+        #    torch>=2.8 de pyannote sin re-descargarlo).
+        _run([*pip_base, "--index-url", torch_index, "torch"], on_line)
+        _run([*pip_base, *BACKEND_PACKAGES], on_line)
 
     _marker_path().write_text(f"{variant}\n{_BACKEND_SCHEMA}\n", encoding="utf-8")
     return variant

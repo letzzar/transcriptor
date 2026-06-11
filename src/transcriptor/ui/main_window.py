@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 from transcriptor import __version__, config
 from transcriptor.models import downloader, registry
 from transcriptor.platform_info import detect_engine, detect_os, engine_label
+from transcriptor.runtime import provision
 from transcriptor.ui.model_manager import RECOMMENDED_MODEL, ModelManagerDialog
 from transcriptor.ui.settings_dialog import SettingsDialog
 from transcriptor.workers.transcribe_worker import TranscribeWorker
@@ -57,10 +58,13 @@ class MainWindow(QMainWindow):
         self._update_folder_label()
 
         # Primer arranque: sin token → Settings; con token y sin modelos → Gestor.
-        if not config.get_hf_token():
-            QTimer.singleShot(0, lambda: self.open_settings(focus_token=True))
-        elif not self._has_any_model():
-            QTimer.singleShot(0, lambda: self.open_model_manager(first_run=True))
+        # En la build offline los modelos van empaquetados y no hace falta token,
+        # así que no se fuerza ninguno de los dos diálogos.
+        if not provision.is_offline_bundle():
+            if not config.get_hf_token():
+                QTimer.singleShot(0, lambda: self.open_settings(focus_token=True))
+            elif not self._has_any_model():
+                QTimer.singleShot(0, lambda: self.open_model_manager(first_run=True))
 
     # ------------------------------------------------------------------ UI
 
