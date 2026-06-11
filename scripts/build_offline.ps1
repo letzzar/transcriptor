@@ -76,9 +76,14 @@ if (-not $SkipModels) {
 # --- 3) FFmpeg ----------------------------------------------------------------
 $ff = (Get-Command ffmpeg -ErrorAction SilentlyContinue).Source
 if ($ff) {
-    # WinGet expone un symlink en Links\; resolvemos el binario real.
+    # WinGet expone un symlink en Links\; resolvemos el binario real. En Windows
+    # PowerShell 5.1 no existe ResolveLinkTarget: usamos la propiedad .Target.
     $item = Get-Item $ff
-    $real = if ($item.LinkType) { $item.ResolveLinkTarget($true).FullName } else { $ff }
+    $real = $ff
+    if ($item.LinkType -and $item.Target) {
+        $t = $item.Target
+        $real = if ($t -is [array]) { $t[0] } else { $t }
+    }
     Copy-Item $real "$payload\ffmpeg.exe" -Force
     Write-Host "==> FFmpeg incluido desde: $real" -ForegroundColor Cyan
 } else {
