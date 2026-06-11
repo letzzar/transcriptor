@@ -40,7 +40,12 @@ SolidCompression=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
-DiskSpanning=no
+; Windows limita un Setup.exe unico a ~4.2 GB. El payload offline (wheels CPU+CUDA
+; + modelos) lo supera, asi que se reparte en varios archivos: Setup.exe + .bin de
+; ~2 GB cada uno. SE DISTRIBUYEN JUNTOS (misma carpeta); el usuario ejecuta el .exe.
+DiskSpanning=yes
+DiskSliceSize=2100000000
+SlicesPerDisk=1
 
 [Languages]
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
