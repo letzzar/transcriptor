@@ -150,9 +150,25 @@ class TranscribeWorker(QThread):
                 if gender_clf is not None:
                     try:
                         self.status.emit("Estimando género de las voces…")
-                        raw = gender.classify_speakers(wav, turns, gender_clf)
+                        # El género se estima SIEMPRE sobre audio sin filtrar: el
+                        # filtro de mejora (highpass=200) borra la fundamental de
+                        # la voz masculina (~85-180 Hz) y sesga a "mujer".
+                        gender_wav = (
+                            wav if not self._enhance
+                            else audio.convert_to_wav(f, enhance=False)
+                        )
+                        try:
+                            raw = gender.classify_speakers(gender_wav, turns, gender_clf)
+                        finally:
+                            if gender_wav != wav:
+                                gender_wav.unlink(missing_ok=True)
                         genders = {
-                            spk: f"probable {label}" for spk, (label, _conf) in raw.items()
+                            spk: (
+                                "género indeterminado"
+                                if label == gender.INDETERMINATE
+                                else f"probable {label}"
+                            )
+                            for spk, (label, _conf) in raw.items()
                         }
                         if genders:
                             self.log.emit(
