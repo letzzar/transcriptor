@@ -24,11 +24,13 @@ El modelo wav2vec2 clasificaba **hombres como mujeres en audio telefónico** (ba
 ### 2) Dos instaladores Windows
 - **Online (thin):** `dist\Transcriptor-Setup.exe` (**105 MB**). Descarga el backend
   en el 1er arranque (Opción C de siempre). `scripts\installer.iss`.
-- **OFFLINE (100% todo incluido):** `dist\Transcriptor-Setup-Offline.exe`. NO descarga
-  nada. Empaqueta: wheelhouse (**torch cpu+cu126** + faster-whisper 1.2.1 + pyannote
-  4.0.4 + transformers 5.10.2 + deps, 104 wheels/variante), **modelos HF** (Whisper
-  large-v3-turbo, diarización pyannote community-1 + segmentation-3.0, género wav2vec2)
-  y **ffmpeg.exe**. Commits `90e3ac3` + `928e9e8`.
+- **OFFLINE (100% todo incluido):** `dist\Transcriptor-Setup-Offline.exe` **+ 5 archivos
+  `.bin`** (disk spanning; **~8 GB en total**, se distribuyen JUNTOS, el usuario ejecuta
+  el `.exe`). NO descarga nada. Empaqueta: wheelhouse (**torch cpu+cu126** + faster-whisper
+  1.2.1 + pyannote 4.0.4 + transformers 5.10.2 + deps, 104 wheels/variante, 2,93 GB),
+  **modelos HF** (Whisper large-v3-turbo, diarización pyannote community-1 + segmentation-3.0,
+  género wav2vec2; 5,44 GB —la caché HF los guarda duplicados blob+snapshot, optimizable)
+  y **ffmpeg.exe**. Commits `90e3ac3`, `928e9e8`, `15cabb7`.
 
 **Cómo funciona el offline** (todo no-op en la build online/dev):
 - `runtime/provision.py`: helpers `offline_wheelhouse/offline_hf_cache/is_offline_bundle/
