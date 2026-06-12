@@ -4,7 +4,12 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
-## 🟢 EN CURSO (2026-06-11, tarde) — Género mejorado + instalador OFFLINE (CPU+CUDA, todo incluido)
+## ✅ CERRADA (2026-06-12) — Género mejorado + instalador OFFLINE (CPU+CUDA, todo incluido)
+
+> **SESIÓN CERRADA: cambio de proyecto.** Todo commiteado y pusheado a Y: (rama
+> `feat/f3-f4-f6`, último `5cbd5bd` + el PDF). Working tree limpio. **Al retomar:**
+> la única tarea abierta es que el Director **pruebe los instaladores** siguiendo
+> `CHECKLIST_PRUEBAS.pdf` (en la raíz del repo). Ver "PENDIENTE" al final.
 
 **Confirmado por el Director:** la transcripción **con GPU funciona en la 1070 Ti**
 (Opción C cerrada en lo funcional).
@@ -52,8 +57,9 @@ offline sin token (`HF_HUB_OFFLINE=1`) y (b) el wheelhouse resuelve completo en 
 limpio con `--no-index` (exit 0, versiones = stack validado, incl. cu126).
 
 ### PENDIENTE
-- **Director: probar `Transcriptor-Setup-Offline.exe`** en una máquina (idealmente sin
-  internet y con/sin GPU) → 1er arranque crea el venv desde wheels y transcribe sin red.
+- **Director: probar los instaladores siguiendo `CHECKLIST_PRUEBAS.pdf`** (raíz del repo).
+  Prioritario: `Transcriptor-Setup-Offline.exe` en una máquina (idealmente sin internet y
+  con/sin GPU) → 1er arranque crea el venv desde wheels y transcribe sin red.
 - **Licencia pyannote:** el modelo de diarización es *gated*; redistribuirlo en el
   instalador es decisión del Director (asumida para sus peritajes). Anotado aquí.
 - El instalador offline deja `{app}\wheels` en disco tras provisionar (no se borra);
