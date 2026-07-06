@@ -4,7 +4,17 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
-## ✅ (2026-07-07, Mac) — CI: GitHub Actions compila Windows + macOS + Linux
+## ✅ CERRADA (2026-07-07, Mac) — CI: GitHub Actions compila Windows + macOS + Linux
+
+> **SESIÓN CERRADA.** Todo commiteado y pusheado a `main` y `feat/f3-f4-f6`
+> (idénticas). **Release v0.2.0 PUBLICADA** (pedida por el Director):
+> https://github.com/letzzar/transcriptor/releases/tag/v0.2.0 con los 3
+> instaladores + sha256 (Setup.exe 89,8 MB · DMG 103 MB · tar.gz 141 MB).
+> Publicar futuras versiones: subir versión en pyproject/installer.iss y
+> `git tag vX.Y.Z && git push origin vX.Y.Z`. **Al retomar:** pendiente que el
+> Director pruebe los 3 instaladores (ver "Pendiente de probar" abajo) y el
+> checklist de la sesión offline (`CHECKLIST_PRUEBAS.pdf`). `gh` CLI instalado
+> en el Mac pero SIN `gh auth login` (hacerlo si se quiere usar).
 
 **Petición del Director:** que GitHub genere las versiones compiladas e instaladores
 (las tres plataformas). Además: `main` pasa a ser la rama principal real
