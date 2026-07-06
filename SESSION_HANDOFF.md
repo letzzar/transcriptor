@@ -4,6 +4,32 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
+## ✅ (2026-07-07, Mac) — CI: GitHub Actions compila el instalador Windows
+
+**Petición del Director:** que GitHub genere las versiones compiladas e instaladores.
+
+- **`.github/workflows/build.yml`** (nuevo): job `windows` en `windows-latest` que
+  reproduce la receta de D:: venv 3.13 + deps thin (`-e .[report,secrets]` +
+  huggingface_hub + tqdm + pyinstaller) → `scripts\build_windows.bat` (Python
+  embebido + PyInstaller) → Inno Setup (preinstalado en el runner) →
+  **artefacto `Transcriptor-Setup-win64`**. Con un tag `v*` además publica una
+  **Release** con `Transcriptor-Setup.exe`.
+- **Disparadores:** push a `main`/`feat/**`, tags `v*` y manual (`workflow_dispatch`;
+  el botón "Run workflow" solo aparecerá cuando el workflow llegue a `main`).
+- **Verificado en real:** run #1 en `feat/f3-f4-f6` → **Success en 2m52s**,
+  artefacto de 89,3 MB (equivale al instalador local de 105 MB, re-comprimido en zip).
+  https://github.com/letzzar/transcriptor/actions
+- **Primera subida de la rama a GitHub:** `feat/f3-f4-f6` no existía en `origin`
+  (GitHub estaba en la F2). Pusheada; `main` sigue antigua — merge pendiente de
+  decisión del Director.
+- **Fuera de CI (decisión técnica):** el instalador OFFLINE (~8 GB) sigue siendo
+  local (`build_offline.ps1`): modelos HF gated (token+licencias) y supera el
+  límite de 2 GiB/archivo de las releases. El `.app` de Mac sigue pendiente (F8 Mac).
+- Nota: el working tree en Mac muestra 22 archivos "modificados" que son SOLO
+  ruido CRLF↔LF del checkout SMB; no se tocaron.
+
+---
+
 ## ✅ CERRADA (2026-06-12) — Género mejorado + instalador OFFLINE (CPU+CUDA, todo incluido)
 
 > **SESIÓN CERRADA: cambio de proyecto.** Todo commiteado y pusheado a Y: (rama
