@@ -4,7 +4,41 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
-## ✅ (2026-07-07, Mac) — CI: GitHub Actions compila el instalador Windows
+## ✅ (2026-07-07, Mac) — CI: GitHub Actions compila Windows + macOS + Linux
+
+**Petición del Director:** que GitHub genere las versiones compiladas e instaladores
+(las tres plataformas). Además: `main` pasa a ser la rama principal real
+(fast-forward a `feat/f3-f4-f6`; ambas ramas quedan idénticas y se pushean juntas).
+
+**Artefactos verificados (run #5/#6, Success 2m38s):**
+- `Transcriptor-Setup-win64` (89,3 MB) — instalador Inno Setup.
+- `Transcriptor-macOS-arm64` (90,2 MB) — DMG con `Transcriptor.app` + enlace a /Applications.
+- `Transcriptor-linux-x86_64` (140 MB) — tar.gz onedir.
+
+**Opción C extendida a POSIX (commits `b5d2bb9` + fix `a4fd010`):**
+- `provision.py`: Python embebido también en `python_embed/bin/python3`; stdlib
+  de respaldo con layout POSIX (`lib/python3.X` + `lib-dynload`); en macOS torch
+  se instala desde PyPI (índices cpu/cu126 son Win/Linux); en Apple Silicon el
+  backend añade `mlx-whisper==0.4.3`.
+- `transcriptor.spec`: `win32ctypes` y `.ico` solo en Windows; en macOS BUNDLE
+  `.app` con `.icns` (`com.letzzar.transcriptor`).
+- `scripts/build_unix.sh`: Python embebido = **python-build-standalone 3.13.14**
+  (tag 20260623, relocalizable; la versión menor DEBE igualar la del Python del
+  build por la stdlib de respaldo/ABI).
+- **BUG macOS cazado y verificado en local**: PyInstaller crea el symlink
+  `Python` (libpython) en `_internal/` y APFS es case-insensitive → el destino
+  `python` colisionaba (`NotADirectoryError` en COLLECT). Fix: carpeta renombrada
+  a `python_embed` (también en Windows, por coherencia). De-riesgado: el python
+  embebido empaquetado crea un venv con pip funcional en macOS.
+
+**Pendiente de probar por el Director:** DMG en Mac (1er arranque descarga backend
+con mlx) y tar.gz en Linux (necesita libs Qt del sistema, p. ej. libxcb-cursor0).
+El `.app` va SIN firmar/notarizar: al abrirlo, clic derecho → Abrir (o
+`xattr -cr /Applications/Transcriptor.app`).
+
+---
+
+## ✅ (2026-07-07, Mac) — CI: GitHub Actions compila el instalador Windows (1ª parte)
 
 **Petición del Director:** que GitHub genere las versiones compiladas e instaladores.
 
