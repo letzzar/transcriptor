@@ -25,7 +25,10 @@ ROOT = os.path.dirname(SPECPATH)
 datas = [
     (os.path.join(ROOT, 'src/transcriptor/resources'), 'transcriptor/resources'),
     # Python embebido (cp313) para provisionar el backend en el 1er arranque.
-    (os.path.join(ROOT, 'scripts/embedded_python'), 'python'),
+    # OJO: el destino NO puede llamarse 'python': en macOS PyInstaller crea el
+    # symlink 'Python' (libpython del bundle) en _internal/ y APFS es
+    # case-insensitive → colisión (NotADirectoryError en COLLECT).
+    (os.path.join(ROOT, 'scripts/embedded_python'), 'python_embed'),
 ]
 binaries = []
 hiddenimports = []

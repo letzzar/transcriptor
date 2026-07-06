@@ -109,16 +109,17 @@ def embedded_python_exe() -> str:
     """Intérprete que crea el venv del backend.
 
     En el bundle PyInstaller (`sys.frozen`) usa el Python embebido en
-    `_internal/python/` (lo prepara `build_windows.bat`). En desarrollo (desde
+    `_internal/python_embed/` (lo preparan `build_windows.bat` /
+    `build_unix.sh`). En desarrollo (desde
     fuentes) usa el intérprete actual del venv.
     """
     if getattr(sys, "frozen", False):
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass:
             if is_windows():
-                candidate = Path(meipass) / "python" / "python.exe"
+                candidate = Path(meipass) / "python_embed" / "python.exe"
             else:
-                candidate = Path(meipass) / "python" / "bin" / "python3"
+                candidate = Path(meipass) / "python_embed" / "bin" / "python3"
             if candidate.exists():
                 return str(candidate)
     return sys.executable
@@ -360,7 +361,7 @@ def _add_embedded_stdlib() -> None:
     meipass = getattr(sys, "_MEIPASS", None)
     if not meipass:
         return
-    py = Path(meipass) / "python"
+    py = Path(meipass) / "python_embed"
     if is_windows():
         subs: tuple[str, ...] = ("Lib", "DLLs")
     else:
