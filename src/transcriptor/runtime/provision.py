@@ -27,7 +27,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from transcriptor.platform_info import is_windows, no_window_creationflags
+from transcriptor.platform_info import is_apple_silicon, is_windows, no_window_creationflags
 
 # Índices de wheels de PyTorch. cu126 trae torch 2.12 (lo probado) + las DLLs de
 # cuDNN/cuBLAS (paquetes nvidia-*-cu12) que CTranslate2 necesita en GPU. OJO:
@@ -45,6 +45,10 @@ BACKEND_PACKAGES = (
     "pyannote.audio==4.0.4",
     "transformers==5.10.2",
 )
+
+# En Apple Silicon el motor de transcripción es MLX (detect_engine() → "mlx"),
+# así que el backend también lo instala. Versión = la validada en dev (F2).
+MLX_PACKAGE = "mlx-whisper==0.4.3"
 
 # Versión del esquema de backend. Súbela al cambiar las versiones/layout de
 # arriba: el marcador deja de coincidir y el siguiente arranque reinstala.
@@ -111,7 +115,10 @@ def embedded_python_exe() -> str:
     if getattr(sys, "frozen", False):
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass:
-            candidate = Path(meipass) / "python" / "python.exe"
+            if is_windows():
+                candidate = Path(meipass) / "python" / "python.exe"
+            else:
+                candidate = Path(meipass) / "python" / "bin" / "python3"
             if candidate.exists():
                 return str(candidate)
     return sys.executable
@@ -258,21 +265,29 @@ def provision(
 
     pip_base = [str(_venv_python()), "-m", "pip", "install", "--only-binary=:all:"]
 
+    packages = list(BACKEND_PACKAGES)
+    if is_apple_silicon():
+        packages.append(MLX_PACKAGE)
+
     wheelhouse = offline_wheelhouse()
     if wheelhouse is not None:
         # Offline: todos los wheels (torch de la variante + motores + deps) están
         # empaquetados. Sin red: pip resuelve solo desde la carpeta local.
         _run(
             [*pip_base, "--no-index", "--find-links", str(wheelhouse / variant),
-             "torch", *BACKEND_PACKAGES],
+             "torch", *packages],
             on_line,
         )
+    elif sys.platform == "darwin":
+        # macOS: los wheels arm64 oficiales de torch están en PyPI; los índices
+        # cpu/cu126 de download.pytorch.org son para Windows/Linux.
+        _run([*pip_base, "torch", *packages], on_line)
     else:
         # Online: 1) torch desde el índice CUDA/CPU correcto (el venv lo registra);
         # 2) el resto desde PyPI, que ve torch ya instalado y lo respeta (satisface
         #    torch>=2.8 de pyannote sin re-descargarlo).
         _run([*pip_base, "--index-url", torch_index, "torch"], on_line)
-        _run([*pip_base, *BACKEND_PACKAGES], on_line)
+        _run([*pip_base, *packages], on_line)
 
     _marker_path().write_text(f"{variant}\n{_BACKEND_SCHEMA}\n", encoding="utf-8")
     return variant
@@ -346,8 +361,14 @@ def _add_embedded_stdlib() -> None:
     if not meipass:
         return
     py = Path(meipass) / "python"
-    for sub in ("Lib", "DLLs"):
-        path = py / sub
+    if is_windows():
+        subs: tuple[str, ...] = ("Lib", "DLLs")
+    else:
+        # Layout POSIX (python-build-standalone): lib/python3.X + lib-dynload.
+        ver = f"python{sys.version_info.major}.{sys.version_info.minor}"
+        subs = (f"lib/{ver}", f"lib/{ver}/lib-dynload")
+    for sub in subs:
+        path = py.joinpath(*sub.split("/"))
         if path.is_dir() and str(path) not in sys.path:
             sys.path.append(str(path))
     if is_windows():

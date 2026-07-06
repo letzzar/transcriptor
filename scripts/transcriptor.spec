@@ -14,6 +14,7 @@
 # embebido que prepara build_windows.bat en scripts/embedded_python.
 
 import os
+import sys
 
 from PyInstaller.utils.hooks import collect_all
 
@@ -34,7 +35,9 @@ hiddenimports = []
 # win32ctypes. Sin ellos, keyring cae al backend "fail" y get_hf_token() lanza
 # NoKeyringError. Los recolectamos explicitamente (antes se colaban como
 # transitivos del stack pesado, que ahora ya no se empaqueta).
-for pkg in ('keyring', 'win32ctypes'):
+# win32ctypes solo existe (y hace falta) en Windows.
+_keyring_pkgs = ('keyring', 'win32ctypes') if sys.platform == 'win32' else ('keyring',)
+for pkg in _keyring_pkgs:
     pkg_datas, pkg_binaries, pkg_hidden = collect_all(pkg)
     datas += pkg_datas
     binaries += pkg_binaries
@@ -85,7 +88,9 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=[os.path.join(ROOT, 'src/transcriptor/resources/logo_app.ico')],
+    # El .ico es formato Windows; en macOS el icono va en el BUNDLE (.icns).
+    icon=[os.path.join(ROOT, 'src/transcriptor/resources/logo_app.ico')]
+    if sys.platform == 'win32' else None,
 )
 coll = COLLECT(
     exe,
@@ -96,3 +101,16 @@ coll = COLLECT(
     upx_exclude=[],
     name='Transcriptor',
 )
+
+# macOS: envolver el onedir en un .app (PyInstaller lo firma ad-hoc en arm64).
+if sys.platform == 'darwin':
+    app = BUNDLE(
+        coll,
+        name='Transcriptor.app',
+        icon=os.path.join(ROOT, 'src/transcriptor/resources/logo_app.icns'),
+        bundle_identifier='com.letzzar.transcriptor',
+        info_plist={
+            'CFBundleShortVersionString': '0.2.0',
+            'NSHighResolutionCapable': True,
+        },
+    )
