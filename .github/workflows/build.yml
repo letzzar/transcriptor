@@ -1,0 +1,63 @@
+name: Build instaladores
+
+# Compila el bundle thin (PyInstaller, Opcion C) y el instalador online de
+# Windows (Inno Setup). Se lanza a mano (workflow_dispatch) o al pushear un
+# tag v* (ademas publica una Release con el instalador).
+#
+# El instalador OFFLINE (~8 GB, modelos HF gated) NO se construye aqui:
+# excede el limite de 2 GiB por archivo de las releases y requiere token HF
+# con licencias aceptadas. Se sigue construyendo en local (build_offline.ps1).
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # Mismo layout que la copia local D:: un .venv con solo las deps del
+      # bundle thin (el stack pesado esta excluido en transcriptor.spec y se
+      # descarga en el 1er arranque). huggingface_hub/tinytag/tqdm son imports
+      # perezosos pero PyInstaller los congela igual, y la app los necesita.
+      - name: Crear venv e instalar dependencias
+        shell: cmd
+        run: |
+          python -m venv .venv
+          .venv\Scripts\python -m pip install --upgrade pip
+          .venv\Scripts\pip install -e .[report,secrets] "huggingface_hub>=0.24" tqdm pyinstaller
+
+      # Copia el Python embebido (base_prefix del venv) y corre PyInstaller.
+      # Salida: dist\Transcriptor\Transcriptor.exe
+      - name: Build PyInstaller (bundle thin)
+        shell: cmd
+        run: scripts\build_windows.bat
+
+      # Inno Setup 6 viene preinstalado en los runners windows-latest.
+      # Salida: dist\Transcriptor-Setup.exe
+      - name: Compilar instalador (Inno Setup)
+        shell: cmd
+        run: '"%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" scripts\installer.iss'
+
+      - name: Subir artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: Transcriptor-Setup-win64
+          path: dist/Transcriptor-Setup.exe
+          if-no-files-found: error
+
+      - name: Publicar Release (solo tags)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Transcriptor-Setup.exe
