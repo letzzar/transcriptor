@@ -16,8 +16,10 @@ from pathlib import Path
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QComboBox,
     QFileDialog,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -25,6 +27,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QRadioButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -32,12 +35,48 @@ from PySide6.QtWidgets import (
 
 from transcriptor import __version__, config
 from transcriptor.models import downloader, registry
+from transcriptor.pipeline import audio
 from transcriptor.platform_info import detect_engine, detect_os, engine_label
 from transcriptor.runtime import provision
 from transcriptor.ui.model_manager import RECOMMENDED_MODEL, ModelManagerDialog
 from transcriptor.ui.settings_dialog import SettingsDialog
-from transcriptor.workers.transcribe_worker import TranscribeWorker
+from transcriptor.ui.toggle import LabeledToggle
+from transcriptor.workers.transcribe_worker import (
+    MODE_COST,
+    AnalysisMode,
+    TranscribeWorker,
+)
 from transcriptor.workers.unify_worker import UnifyWorker
+
+# Los cuatro modos, en el orden en que se muestran: de más rápido a más lento.
+_MODES: list[tuple[AnalysisMode, str, str]] = [
+    (
+        AnalysisMode.TRANSCRIPTION,
+        "Solo transcripción",
+        "Solo el texto, sin separar quién habla. Es el modo rápido.",
+    ),
+    (
+        AnalysisMode.GENDER,
+        "Transcripción + género",
+        (
+            "Añade a cada frase el sexo probable de la voz. No agrupa por persona: "
+            "no se afirma que dos frases del mismo sexo sean el mismo hablante."
+        ),
+    ),
+    (
+        AnalysisMode.SPEAKERS,
+        "Transcripción + voces",
+        (
+            "Separa a los interlocutores (Voz 1, Voz 2…). Es el paso caro: la "
+            "diarización es, con diferencia, lo que más tarda."
+        ),
+    ),
+    (
+        AnalysisMode.SPEAKERS_GENDER,
+        "Transcripción + voces + género",
+        "Separa interlocutores y estima el sexo de cada uno. Análisis completo.",
+    ),
+]
 
 
 class MainWindow(QMainWindow):
@@ -99,33 +138,59 @@ class MainWindow(QMainWindow):
         model_row.addWidget(self.btn_manage)
         layout.addLayout(model_row)
 
-        # Hablantes + limpieza
-        opts_row = QHBoxLayout()
-        self.chk_auto_speakers = QPushButton("Auto-detectar hablantes")
-        self.chk_auto_speakers.setCheckable(True)
-        self.chk_auto_speakers.setChecked(True)
-        self.chk_auto_speakers.toggled.connect(self._on_auto_speakers_toggled)
-        opts_row.addWidget(self.chk_auto_speakers)
-        opts_row.addWidget(QLabel("Máx.:"))
+        # Modo de análisis
+        modo_box = QGroupBox("Modo de análisis")
+        modo_layout = QVBoxLayout(modo_box)
+        self.mode_group = QButtonGroup(self)
+        guardado = config.get_analysis_mode()
+        for modo, titulo, ayuda in _MODES:
+            radio = QRadioButton(titulo)
+            radio.setToolTip(ayuda)
+            radio.setChecked(modo == guardado)
+            radio.toggled.connect(self._update_cost_hint)
+            self.mode_group.addButton(radio)
+            radio.setProperty("modo", str(modo))
+            modo_layout.addWidget(radio)
+        if self.mode_group.checkedButton() is None:
+            self.mode_group.buttons()[0].setChecked(True)
+
+        self.lbl_cost = QLabel()
+        self.lbl_cost.setWordWrap(True)
+        modo_layout.addWidget(self.lbl_cost)
+        layout.addWidget(modo_box)
+
+        # Opciones (interruptores con estado visible)
+        opts_box = QGroupBox("Opciones")
+        opts_layout = QVBoxLayout(opts_box)
+        self.tgl_clean = LabeledToggle(
+            "Limpiar audio (FFmpeg)",
+            tooltip="Normaliza el nivel y reduce ruido antes de transcribir. "
+            "Recomendado en grabaciones lejanas o con poco volumen.",
+        )
+        opts_layout.addWidget(self.tgl_clean)
+
+        self.tgl_auto_speakers = LabeledToggle(
+            "Auto-detectar número de hablantes",
+            checked=True,
+            tooltip="Encendido: la diarización decide cuántas voces hay. "
+            "Apagado: se limita al máximo indicado.",
+        )
+        self.tgl_auto_speakers.toggled.connect(self._on_auto_speakers_toggled)
+        opts_layout.addWidget(self.tgl_auto_speakers)
+
+        max_row = QHBoxLayout()
+        max_row.addSpacing(60)
+        max_row.addWidget(QLabel("Máximo de voces:"))
         self.spin_speakers = QSpinBox()
         self.spin_speakers.setRange(2, 5)
         self.spin_speakers.setValue(2)
         self.spin_speakers.setEnabled(False)  # deshabilitado mientras Auto está activo
-        opts_row.addWidget(self.spin_speakers)
-        opts_row.addSpacing(20)
-        self.chk_clean = QPushButton("Limpiar audio (FFmpeg)")
-        self.chk_clean.setCheckable(True)
-        opts_row.addWidget(self.chk_clean)
-        self.chk_gender = QPushButton("Estimar género de las voces")
-        self.chk_gender.setCheckable(True)
-        self.chk_gender.setChecked(True)
-        self.chk_gender.setToolTip(
-            "Estima el género de cada voz con un modelo (descarga ~1 GB la 1ª vez). "
-            "Es una estimación; se etiqueta como 'probable'."
-        )
-        opts_row.addWidget(self.chk_gender)
-        opts_row.addStretch()
-        layout.addLayout(opts_row)
+        max_row.addWidget(self.spin_speakers)
+        max_row.addStretch()
+        opts_layout.addLayout(max_row)
+        layout.addWidget(opts_box)
+
+        self._update_cost_hint()
 
         # Botones de acción
         action_row = QHBoxLayout()
@@ -233,13 +298,76 @@ class MainWindow(QMainWindow):
         self.btn_folder.setEnabled(not running)
         self.btn_manage.setEnabled(not running)
         self.cmb_model.setEnabled(not running and self.cmb_model.count() > 0)
-        self.chk_auto_speakers.setEnabled(not running)
-        self.spin_speakers.setEnabled(not running and not self.chk_auto_speakers.isChecked())
-        self.chk_clean.setEnabled(not running)
-        self.chk_gender.setEnabled(not running)
+        self.tgl_auto_speakers.setEnabled(not running)
+        self.spin_speakers.setEnabled(not running and not self.tgl_auto_speakers.isChecked())
+        self.tgl_clean.setEnabled(not running)
+        for boton in self.mode_group.buttons():
+            boton.setEnabled(not running)
         self.btn_cancel.setVisible(running)
 
     # ----------------------------------------------------------------- slots
+
+    def _current_mode(self) -> AnalysisMode:
+        boton = self.mode_group.checkedButton()
+        if boton is None:
+            return AnalysisMode.TRANSCRIPTION
+        return AnalysisMode(boton.property("modo"))
+
+    def _folder_seconds(self) -> float:
+        """Duración total de los audios de la carpeta, en segundos (0 si no se sabe)."""
+        if not self._folder or not self._folder.exists():
+            return 0.0
+        from tinytag import TinyTag
+
+        total = 0.0
+        for p in self._folder.iterdir():
+            if p.is_file() and p.suffix.lower() in audio.SUPPORTED_AUDIO_EXTENSIONS:
+                # Un archivo ilegible no debe impedir el aviso del resto: se
+                # omite y ya está (el aviso es orientativo, no un inventario).
+                try:
+                    total += TinyTag.get(str(p)).duration or 0.0
+                except Exception:  # noqa: BLE001, S110
+                    pass
+        return total
+
+    def _update_cost_hint(self) -> None:
+        """Avisa de lo que cuesta el modo elegido, comparado con el más rápido.
+
+        El multiplicador sale de mediciones reales (ver `MODE_COST`). Si ya hay
+        carpeta seleccionada, se traduce además a minutos concretos, que es lo
+        que el usuario entiende.
+        """
+        modo = self._current_mode()
+        coste = MODE_COST[modo]
+        base = MODE_COST[AnalysisMode.TRANSCRIPTION]
+
+        if modo == AnalysisMode.TRANSCRIPTION:
+            texto = f"⏱ Modo rápido · aprox. {coste:.2f}× la duración del audio"
+        else:
+            texto = (
+                f"⏱ Aprox. {coste:.2f}× la duración del audio · "
+                f"unas {coste / base:.0f}× más lento que 'Solo transcripción'"
+            )
+
+        segundos = self._folder_seconds()
+        if segundos > 0:
+            estimado = segundos * coste
+            texto += (
+                f"\nPara los {self._fmt_min(segundos)} de audio de la carpeta: "
+                f"unos {self._fmt_min(estimado)}."
+            )
+        if modo.needs_diarization:
+            texto += "\n⚠ Separar voces requiere token de HuggingFace."
+        self.lbl_cost.setText(texto)
+        self.lbl_cost.setStyleSheet(
+            "color: #b06000;" if coste > 0.1 else "color: gray;"
+        )
+
+    @staticmethod
+    def _fmt_min(segundos: float) -> str:
+        if segundos < 60:
+            return f"{segundos:.0f} s"
+        return f"{segundos / 60:.0f} min"
 
     def _on_auto_speakers_toggled(self, checked: bool) -> None:
         # En modo Auto, el nº de hablantes lo decide la diarización; deshabilita
@@ -253,6 +381,7 @@ class MainWindow(QMainWindow):
             self._folder = Path(chosen)
             config.set_last_folder(self._folder)
             self._update_folder_label()
+            self._update_cost_hint()  # ya se puede estimar en minutos concretos
 
     def _toggle_logs(self, checked: bool) -> None:
         self.txt_logs.setVisible(checked)
@@ -284,14 +413,18 @@ class MainWindow(QMainWindow):
         self.progress.setValue(0)
 
         # Auto → None (la diarización decide); manual → el tope del spinbox.
-        max_speakers = None if self.chk_auto_speakers.isChecked() else self.spin_speakers.value()
+        max_speakers = (
+            None if self.tgl_auto_speakers.isChecked() else self.spin_speakers.value()
+        )
+        modo = self._current_mode()
+        config.set_analysis_mode(modo)
         worker = TranscribeWorker(
             self._folder,
             model_id=model_id,
             max_speakers=max_speakers,
-            enhance=self.chk_clean.isChecked(),
+            enhance=self.tgl_clean.isChecked(),
             language=None if language == "auto" else language,
-            detect_gender=self.chk_gender.isChecked(),
+            mode=modo,
             parent=self,
         )
         worker.status.connect(self.lbl_status.setText)

@@ -27,6 +27,15 @@ _LABEL_ES = {"male": "hombre", "female": "mujer"}
 # Menos audio que esto para un hablante → no se estima (poco fiable).
 _MIN_SECONDS = 1.0
 
+# Troceado de la clasificación. wav2vec2 consume ~48 MB por segundo de audio y
+# no tiene techo: pasarle de golpe todo lo que habla una voz en una grabación
+# larga agotaba la RAM y colgaba el equipo (30 min → decenas de GB). Se
+# clasifican unos pocos trozos repartidos por toda su intervención, de uno en
+# uno, y se promedian las probabilidades: la memoria queda acotada al trozo y la
+# muestra es más representativa que una única pasada.
+_CHUNK_SECONDS = 10.0
+_MAX_CHUNKS = 6
+
 # Banda de frecuencia fundamental (F0) plausible para voz humana, en Hz.
 _F0_MIN = 70.0
 _F0_MAX = 300.0
@@ -68,19 +77,45 @@ class GenderClassifier:
             self._model.eval()
 
     def classify(self, samples: np.ndarray, sample_rate: int) -> tuple[str, float]:
-        """Devuelve (etiqueta_es, confianza) para una señal mono float32."""
+        """Devuelve (etiqueta_es, confianza) para una señal mono float32.
+
+        La señal se trocea (ver `_CHUNK_SECONDS`) y se clasifica trozo a trozo,
+        promediando las probabilidades: el pico de memoria depende del trozo, no
+        de la duración total.
+        """
         import torch
 
         self._load()
-        inputs = self._feature_extractor(
-            samples, sampling_rate=sample_rate, return_tensors="pt"
-        )
-        with torch.no_grad():
-            logits = self._model(**inputs).logits
-        probs = torch.softmax(logits, dim=-1)[0]
+        total: Any = None
+        chunks = _sample_chunks(samples, sample_rate)
+        for chunk in chunks:
+            inputs = self._feature_extractor(
+                chunk, sampling_rate=sample_rate, return_tensors="pt"
+            )
+            with torch.no_grad():
+                logits = self._model(**inputs).logits
+            probs = torch.softmax(logits, dim=-1)[0]
+            total = probs if total is None else total + probs
+        probs = total / len(chunks)
         idx = int(probs.argmax())
         raw = str(self._model.config.id2label[idx])
         return _LABEL_ES.get(raw, raw), float(probs[idx])
+
+
+def _sample_chunks(samples: np.ndarray, sample_rate: int) -> list[np.ndarray]:
+    """Hasta `_MAX_CHUNKS` trozos de `_CHUNK_SECONDS` repartidos uniformemente.
+
+    Son vistas de `samples` (no copias). Si la señal no llega a un trozo, se
+    devuelve entera.
+    """
+    import numpy as np
+
+    size = int(_CHUNK_SECONDS * sample_rate)
+    if samples.size <= size:
+        return [samples]
+    count = min(_MAX_CHUNKS, samples.size // size)
+    starts = np.linspace(0, samples.size - size, count).astype(int)
+    return [samples[start : start + size] for start in starts]
 
 
 def estimate_f0(samples: np.ndarray, sample_rate: int) -> float | None:
@@ -173,6 +208,49 @@ def _load_samples(wav: Path) -> tuple[np.ndarray, int]:
         raw = w.readframes(w.getnframes())
     samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
     return samples, sample_rate
+
+
+def classify_ranges(
+    wav: Path,
+    ranges: list[tuple[float, float]],
+    classifier: GenderClassifier,
+) -> list[str | None]:
+    """Estima el género de cada tramo por separado, sin agruparlos.
+
+    Para el modo "transcripción + género", que corre SIN diarización: no hay
+    hablantes que agrupar, así que cada frase se juzga sola. No se afirma que
+    dos frases del mismo género sean la misma persona.
+
+    PRECISIÓN LIMITADA, y no por falta de ajuste: con 2-8 segundos por frase,
+    el 11% de las frases de un MISMO hablante reciben el sexo contrario
+    (medido sobre grabación real, contrastando contra la diarización). El
+    informe lo advierte en su cabecera; ver `AnalysisMode.report_description`.
+
+    Ya se probó a exigir que el modelo y el F0 coincidieran (devolviendo
+    INDETERMINATE si no): NO sirve. La cobertura cae a la mitad (76 → 42
+    frases etiquetadas) y la tasa de error se queda igual (11% → 10%), porque
+    con tan poco audio el F0 tampoco es fiable —`estimate_f0` necesita al
+    menos 5 tramos sonoros— y ambos indicadores fallan a la vez y en la misma
+    dirección. Para atribuir sexo con fundamento hay que usar el modo con
+    separación de voces, que acumula hasta 60 s por hablante.
+
+    Returns:
+        Una etiqueta por tramo, en el mismo orden que `ranges`. None en los
+        tramos demasiado cortos para estimar nada.
+    """
+    samples, sample_rate = _load_samples(wav)
+
+    etiquetas: list[str | None] = []
+    for start, end in ranges:
+        trozo = samples[int(start * sample_rate) : int(end * sample_rate)]
+        if trozo.size < int(_MIN_SECONDS * sample_rate):
+            etiquetas.append(None)
+            continue
+        label, conf = classifier.classify(trozo, sample_rate)
+        f0 = estimate_f0(trozo, sample_rate)
+        etiqueta, _ = _combine(label, conf, f0)
+        etiquetas.append(etiqueta)
+    return etiquetas
 
 
 def classify_speakers(

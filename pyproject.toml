@@ -71,5 +71,7 @@ strict = true
 #   mlx-whisper / faster-whisper: motores opcionales por plataforma (en cada SO
 #   falta uno de los dos). tqdm: sin py.typed (lo usa download_worker).
 [[tool.mypy.overrides]]
-module = ["mlx_whisper", "faster_whisper", "tqdm"]
+# `mlx_whisper.*` cubre también los submódulos (audio, decoding, load_models),
+# que usa la detección de idioma por ventana de `engines/mlx_engine.py`.
+module = ["mlx_whisper", "mlx_whisper.*", "faster_whisper", "tqdm"]
 ignore_missing_imports = true

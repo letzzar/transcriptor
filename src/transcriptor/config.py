@@ -130,6 +130,23 @@ def set_last_folder(path: Path | str | None) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Modo de análisis (rapidez vs detalle)
+# ---------------------------------------------------------------------------
+
+def get_analysis_mode() -> str:
+    """Último modo de análisis usado. Por defecto, el más rápido.
+
+    Se devuelve como str y no como `AnalysisMode` para no importar el worker
+    (y con él PySide6 y el pipeline) desde `config`.
+    """
+    return str(_settings().value("ui/analysis_mode", "transcription"))
+
+
+def set_analysis_mode(mode: str) -> None:
+    _settings().setValue("ui/analysis_mode", str(mode))
+
+
+# ---------------------------------------------------------------------------
 # Modelo preferido
 # ---------------------------------------------------------------------------
 

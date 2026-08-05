@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 from transcriptor import config
 from transcriptor.pipeline.merge import Turn
-from transcriptor.platform_info import has_cuda
+from transcriptor.platform_info import has_cuda, has_mps
 
 if TYPE_CHECKING:
     import torch
@@ -108,9 +108,23 @@ class Diarizer:
         self._pipeline: Any | None = None
 
     def _resolve_device(self) -> str:
+        """Mejor acelerador disponible: CUDA > MPS > CPU.
+
+        La diarización es la etapa más cara del pipeline (en Mac se llevaba el
+        96% del tiempo por correr en CPU). Medido en Apple Silicon con dos
+        audios reales, pasar a MPS da 4,3× y 8,9× menos tiempo (42→10 s y
+        233→26 s) y los turnos salen IDÉNTICOS: mismo número, mismos hablantes
+        y 0,000 s de desviación. Que el resultado no cambie es condición
+        indispensable aquí: un informe pericial no puede depender de en qué
+        dispositivo se ejecutó.
+        """
         if self._device != "auto":
             return self._device
-        return "cuda" if has_cuda() else "cpu"
+        if has_cuda():
+            return "cuda"
+        if has_mps():
+            return "mps"
+        return "cpu"
 
     def load(self) -> Any:
         """Construye (una vez) el pipeline de pyannote sobre el device elegido."""

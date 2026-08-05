@@ -4,6 +4,148 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
+## ✅ CERRADA (2026-08-05, Mac) — Cuelgue por memoria, transcripción determinista, idioma por ventana, 4 modos y diarización en MPS
+
+> **SESIÓN CERRADA.** Todo commiteado en `feat/f3-f4-f6`. **Pendiente de decidir
+> por el Director:** hacer push a `nas` y a `origin` (GitHub), y probar en
+> Windows que los cambios de motor no rompen nada allí (`multilingual=True`,
+> `temperature=0`, `condition_on_previous_text=False` son nuevos en
+> `faster_engine`). Ver "PENDIENTE" al final.
+
+**Entorno Mac nuevo:** se trabaja en la **copia local** `~/Mi Software/Trasnscriptor`
+(el NAS por SMB es lento: un `pip list` tardaba >2 min). Se recuperó el `.git`
+desde el NAS (`git remote add nas "/Volumes/Software/Mi software/Transcriptor"`).
+`.venv` con **Python 3.12.13** y el stack **fijado al validado** de
+`provision.py` (pyannote 4.0.4, transformers 5.10.2, faster-whisper 1.2.1,
+mlx-whisper 0.4.3). Se borró el `venv/` viejo (Python 3.9.6, del prototipo
+Tkinter, 966 MB). **OJO:** `pyproject.toml` declara rangos, así que un
+`pip install -e .[engines]` futuro volverá a resolver a "latest".
+
+### 1) El cuelgue de 160 GB de RAM (`pipeline/gender.py`)
+`classify_speakers` concatenaba TODO el audio de un hablante y lo pasaba de una
+pasada a wav2vec2-large. Medido: **~48 MB de RAM por segundo de voz, sin techo**
+(no es O(T²): transformers 5.x usa SDPA). Un hablante con 15 min → ~43 GB, con
+24 GB físicos → swap → cuelgue. **Fix:** `_sample_chunks` toma 6 trozos de 10 s
+repartidos por toda la intervención y se clasifican de uno en uno promediando
+probabilidades. Pico medido: **plano en ~0,5 GB** con 1 min o con 30 min.
+Verificado en ejecución real: 43 min de audio sin pasar de 3 GB.
+
+### 2) Transcripción DETERMINISTA (`temperature=0` en ambos motores)
+Whisper reintenta con muestreo aleatorio cuando una ventana falla sus umbrales.
+Medido con 3 procesos independientes sobre el mismo archivo:
+- por defecto → 146 / 375 / 214 segmentos y **1 / 221 / 55 ilegibles** (tres
+  transcripciones DISTINTAS del mismo audio: indefendible en un peritaje).
+- `temperature=0` + `condition_on_previous_text=False` → 84 segmentos, 3
+  ilegibles, **huella SHA idéntica las 3 veces**.
+
+### 3) Tramos ilegibles (`merge.display_text`)
+`Segment` lleva ahora `avg_logprob` y `compression_ratio` (ambos motores los
+exponen igual). Por debajo de -1.0 o por encima de 2.4 el texto se sustituye por
+**`[audio ilegible]`**, conservando marca de tiempo y hablante. Evita dar por
+buena la invención de Whisper sobre audio malo. **`no_speech_prob` NO sirve**:
+medido, sale 0.0000 incluso en segmentos alucinados.
+
+### 4) Idioma por ventana
+Whisper fijaba el idioma con los **primeros 30 s** y lo dejaba clavado (incluido
+el tokenizador): un audio de 36 min salía entero en catalán por una ventana
+inicial. Ahora:
+- **Mac** (`_language_spans` + `_apply_hysteresis`): detección cada 30 s y
+  agrupación de ventanas consecutivas. **El umbral de confianza NO sirve** (las
+  detecciones falsas vienen con ru=0.925, pt=0.883); lo que las filtra es la
+  **persistencia**: se exigen 2 ventanas seguidas. WA0000 pasó de 4 tramos
+  (es/gl/en/es) a 1 (`es`); WA0002 de 27 tramos (con ru/fi/el/is) a 5, y sus
+  primeros 16 min ya son `es` en vez de `ca`.
+- **Windows**: `multilingual=True`, que faster-whisper trae de serie.
+- Coste: la transcripción sube ~1,7× (9,7 → 16,4 s en un audio de 6:07).
+
+### 5) Diarización en MPS — la optimización grande
+`_resolve_device()` solo miraba CUDA, así que en Apple Silicon caía a CPU y se
+llevaba el **96% del tiempo**. Ahora CUDA > **MPS** > CPU (`platform_info.has_mps`).
+Medido, con turnos **IDÉNTICOS** (mismo número, mismos hablantes, 0,000 s de
+desviación — condición indispensable para un peritaje):
+- audio 1:10 → 42,1 s a **9,9 s** (4,3×)
+- audio 6:07 → 233,1 s a **26,1 s** (**8,9×**)
+`PYTORCH_ENABLE_MPS_FALLBACK` **no hace falta**: pyannote corre en MPS puro.
+
+### 6) Cuatro modos de análisis + UI rediseñada
+`AnalysisMode` (StrEnum) en `workers/transcribe_worker.py`, escalones
+excluyentes ordenados por coste. Medido de punta a punta sobre 6:07 de audio:
+
+| Modo | Tiempo | × audio |
+|---|---|---|
+| `transcription` | 16,9 s | 0,05× |
+| `gender` (por frase, sin agrupar) | 32,9 s | 0,09× |
+| `speakers` | 40-46 s | 0,11× |
+| `speakers_gender` | 47-61 s | 0,13× |
+
+- `ui/toggle.py` (**nuevo**): interruptor deslizante dibujado con `QPainter`
+  (verde/bolita derecha = encendido) + texto ENCENDIDO/APAGADO, porque el color
+  solo no es accesible. A mano y no con QSS para que se vea igual en Win y Mac.
+- `main_window.py`: selector de modo con **aviso de coste en minutos reales**
+  ("Para los 43 min de audio de la carpeta: unos 5 min"), recalculado al cambiar
+  de modo o de carpeta. El modo se recuerda en QSettings (`ui/analysis_mode`).
+- **Variabilidad**: los tiempos oscilan ±30% entre ejecuciones. El aviso dice
+  "aprox." a propósito.
+
+### 7) El informe no insinúa análisis que no se han hecho
+- En modo `transcription` las líneas van **sin etiqueta de hablante** (antes
+  ponía "Voz 1", que afirmaba una identificación no realizada).
+- Cabecera nueva `Análisis: …` que declara qué se buscó y **qué NO**.
+- Si se pidió diarización y **falló**, la cabecera lo dice y las líneas van sin
+  etiqueta, en vez de mentir.
+
+### 8) Limpieza de audio (`_CLEANUP_FILTERS`)
+La puerta de ruido estaba a **-30 dB** y el audio real del Director promedia
+**-31,9 dB**: se comía la voz. Ahora `dynaudnorm` + puerta a **-45 dB**. Medido:
+el nivel sube de -31,9 a -22,6 dB.
+
+### Callejón sin salida documentado (no reintentar sin datos)
+Se probó exigir que el modelo wav2vec2 y el F0 **coincidieran** en el modo de
+género por frase (que tiene un **11% de etiquetas contradictorias** sobre el
+mismo hablante). **NO funciona**: la cobertura cae a la mitad (76 → 42 frases) y
+la tasa de error se queda igual (11% → 10%), porque con frases de 2-8 s el F0
+tampoco es fiable y ambos indicadores fallan a la vez. Revertido a permisivo; el
+aviso de cabecera es la protección real. Documentado en el docstring de
+`classify_ranges` y en `tests/test_gender_combine.py`.
+
+### PENDIENTE
+- **Push a `nas` y a `origin`** (no hecho; decisión del Director).
+- **Probar en Windows**: `faster_engine` lleva ahora `temperature=0`,
+  `condition_on_previous_text=False` y `multilingual=True`. Sin verificar allí.
+- **Fallo de diarización se lleva el archivo entero**: `transcribe_worker` solo
+  captura `DiarizationError`, pero `Pipeline.from_pretrained` lanza
+  `GatedRepoError` de `huggingface_hub`, que escapa al `except` general y pierde
+  el archivo en vez de caer al modo sin hablantes. Detectado con un token
+  caducado; arreglo estimado: 3 líneas en `diarization.py`.
+- **Género por frase: 11% de error irreducible.** Si el sexo importa en el
+  peritaje, usar el modo con separación de voces (acumula 60 s por hablante).
+- WA0002 conserva 2 tramos de idioma dudosos (`pt` 16-18 min, `is` 31-33,5 min)
+  que aguantaron 2 ventanas. Se limpiarían subiendo la histéresis a 3 o
+  restringiendo a un juego de idiomas plausibles.
+- Los 20 avisos de `ruff` 0.16 son **preexistentes** (el proyecto se escribió con
+  ruff 0.6, que traía menos reglas por defecto). Los 8 errores de `mypy` son
+  APIs solo-Windows y en Windows pasa limpio.
+
+---
+
+## 📌 (2026-07-19, Windows) — Tecnología a vigilar: parakeet.cpp
+
+Analizado https://github.com/mudler/parakeet.cpp a petición del Director (¿mejora
+para el proyecto?). **Decisión: NO integrar por ahora; vigilar.** Motivos:
+- Es ASR Parakeet (NVIDIA) en C++/ggml, sin runtime Python: rápido y ligero, MIT,
+  activo (v0.4.0 jul-2026), CPU/CUDA/Metal/Vulkan, timestamps por palabra + confianza,
+  multilingüe (`parakeet-tdt-0.6b-v3`, 25 idiomas incl. español).
+- Pero NO elimina nuestro stack pesado: torch está por **pyannote + wav2vec2**
+  (diarización/género), no por Whisper (faster-whisper usa CTranslate2). Ahorro ~0.
+- Whisper large-v3-turbo sigue siendo la referencia en español telefónico/degradado
+  (nuestro caso legal); no cambiar motor validado sin benchmark con audios reales.
+- Sin bindings Python (C-API/FFI): integración cara, dos motores que mantener.
+
+**Revisitar si:** aparece diarización en ese ecosistema (permitiría jubilar torch →
+instalador de ~8 GB a cientos de MB) o si se quiere un modo "borrador rápido" en CPU.
+
+---
+
 ## ✅ CERRADA (2026-07-07, Mac) — CI: GitHub Actions compila Windows + macOS + Linux
 
 > **SESIÓN CERRADA.** Todo commiteado y pusheado a `main` y `feat/f3-f4-f6`

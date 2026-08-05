@@ -41,16 +41,32 @@ def render_analysis(
     enhanced: bool,
     metadata: FileMetadata,
     segments: list[LabeledSegment],
+    analysis: str = "",
 ) -> str:
-    """Genera el contenido de un `*_ANALIZADO.txt`."""
+    """Genera el contenido de un `*_ANALIZADO.txt`.
+
+    `analysis` describe qué se analizó (ver `AnalysisMode.report_description`) y
+    se escribe en la cabecera: el lector del informe debe saber qué NO se buscó.
+
+    Un segmento sin hablante (`speaker` vacío) se escribe SIN los paréntesis: en
+    el modo de solo transcripción no se ha identificado a nadie, y poner una
+    etiqueta ahí afirmaría una identificación que no se ha hecho.
+    """
     lines = [
         f"Análisis de audio - {source_name}",
         f"Idioma: {language.upper()} | Limpieza: {'SÍ' if enhanced else 'NO'}",
+    ]
+    if analysis:
+        lines.append(f"Análisis: {analysis}")
+    lines += [
         f"Duración: {metadata.duration} | sha256: {metadata.sha256}",
         "=" * 60 + "\n",
     ]
     for seg in segments:
-        lines.append(f"{format_timestamp(seg.start)} ({seg.speaker}): {seg.text}")
+        marca = format_timestamp(seg.start)
+        lines.append(
+            f"{marca} ({seg.speaker}): {seg.text}" if seg.speaker else f"{marca} {seg.text}"
+        )
     return "\n".join(lines)
 
 

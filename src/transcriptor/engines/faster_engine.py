@@ -87,9 +87,24 @@ class FasterEngine:
     ) -> Iterable[Segment]:
         model = self._load_model()
 
-        kwargs: dict[str, object] = {}
+        # Mismo criterio que en MlxEngine (ver allí la justificación medida):
+        # decodificación determinista, porque un informe pericial debe ser
+        # reproducible. `temperature=0` desactiva el reintento aleatorio de
+        # Whisper; sin esto faster-whisper usa la escalera 0.0→1.0 por defecto.
+        # Ambos motores deben comportarse igual en las dos plataformas.
+        kwargs: dict[str, object] = {
+            "condition_on_previous_text": False,
+            "temperature": 0.0,
+        }
         if language and language != "auto":
             kwargs["language"] = language
+        else:
+            # Idioma por ventana (equivalente a `_language_spans` en MlxEngine):
+            # sin esto, Whisper fija el idioma con los primeros 30 s y decodifica
+            # el resto del archivo con él, aunque la conversación cambie de
+            # idioma. faster-whisper lo trae de serie y sale casi gratis: reusa
+            # la salida del encoder y solo cambia el token de idioma del prompt.
+            kwargs["multilingual"] = True
 
         # `transcribe` devuelve (generador_de_segmentos, info). El generador es
         # perezoso: materializamos a lista para devolver una secuencia estable.
@@ -102,6 +117,8 @@ class FasterEngine:
                 start=float(seg.start),
                 end=float(seg.end),
                 language=detected_lang,
+                avg_logprob=float(seg.avg_logprob),
+                compression_ratio=float(seg.compression_ratio),
             )
             for seg in segments_iter
         ]

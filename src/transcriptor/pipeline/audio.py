@@ -17,7 +17,20 @@ from pathlib import Path
 from transcriptor.platform_info import is_windows, no_window_creationflags
 
 # Filtros de reducción de ruido del prototipo (paso banda voz + denoise + gate).
-_CLEANUP_FILTERS = "highpass=f=200, lowpass=f=3000, afftdn=nr=10:nf=-25, agate=threshold=-30dB:ratio=2"
+# Cadena de limpieza. El orden importa:
+#   highpass/lowpass → recorta fuera de la banda de voz telefónica.
+#   afftdn           → reduce ruido de fondo.
+#   dynaudnorm       → normaliza el nivel POR TRAMOS, que es lo que salva las
+#                      grabaciones lejanas: sube la voz floja sin reventar los
+#                      picos. Va después del denoise para no amplificar ruido.
+#   agate            → puerta de ruido. El umbral es -45 dB y NO -30 dB: con
+#                      -30 dB una grabación de nivel medio -32 dB (micrófono
+#                      lejos, caso real) se quedaba prácticamente muda, porque
+#                      la puerta cortaba la propia voz.
+_CLEANUP_FILTERS = (
+    "highpass=f=200, lowpass=f=3000, afftdn=nr=10:nf=-25, "
+    "dynaudnorm=f=150:g=15:p=0.9, agate=threshold=-45dB:ratio=2"
+)
 
 # Extensiones de audio/vídeo que el pipeline acepta (FFmpeg las normaliza a WAV).
 SUPPORTED_AUDIO_EXTENSIONS = frozenset(

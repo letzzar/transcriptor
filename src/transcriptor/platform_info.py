@@ -40,6 +40,24 @@ def has_cuda() -> bool:
     return bool(torch.cuda.is_available())
 
 
+def has_mps() -> bool:
+    """True si torch puede usar la GPU integrada de Apple (Metal / MPS).
+
+    Se usa para la diarización, que es la etapa más lenta del pipeline: medido
+    en Apple Silicon, pyannote pasa de 233 s a 26 s (audio de 6:07) con
+    resultados idénticos. No afecta a la transcripción, que en Mac va por MLX.
+
+    Devuelve False si torch no está instalado (la UI arranca antes que el
+    backend pesado) o si la build de torch no trae soporte MPS.
+    """
+    try:
+        import torch  # type: ignore[import-not-found,unused-ignore]
+    except ImportError:
+        return False
+    backend = getattr(torch.backends, "mps", None)
+    return bool(backend is not None and backend.is_available())
+
+
 def detect_engine() -> Engine:
     """Selecciona el motor Whisper óptimo para esta máquina."""
     if is_apple_silicon():

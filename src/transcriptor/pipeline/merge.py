@@ -19,6 +19,18 @@ from transcriptor.engines.base import Segment
 UNKNOWN_SPEAKER = "Voz Desconocida"
 MINOR_SPEAKER = "Interferencia / Voz menor"
 
+# Texto con el que se sustituye un tramo que Whisper no transcribió con
+# fiabilidad. En una auditoría legal es preferible dejar constancia de que ahí
+# hay audio ininteligible antes que dar por buena una frase inventada.
+ILLEGIBLE_TEXT = "[audio ilegible]"
+
+# Umbrales de calidad de Whisper (sus propios valores por defecto al decodificar):
+#   avg_logprob        → confianza media del tramo; por debajo, el modelo dudaba.
+#   compression_ratio  → texto muy comprimible = repetitivo/degenerado, el
+#                        clásico bucle de Whisper cuando el audio es ruido.
+_MIN_AVG_LOGPROB = -1.0
+_MAX_COMPRESSION_RATIO = 2.4
+
 
 @dataclass(frozen=True)
 class Turn:
@@ -37,6 +49,22 @@ class LabeledSegment:
     end: float
     text: str
     speaker: str  # "Voz 1", MINOR_SPEAKER o UNKNOWN_SPEAKER
+
+
+def display_text(segment: Segment) -> str:
+    """Texto del segmento, o `ILLEGIBLE_TEXT` si Whisper no lo transcribió bien.
+
+    Un motor que no exponga una métrica la deja a None; en ese caso no se juzga
+    por ella (el texto se respeta si ninguna señal disponible lo desmiente).
+    """
+    if segment.avg_logprob is not None and segment.avg_logprob < _MIN_AVG_LOGPROB:
+        return ILLEGIBLE_TEXT
+    if (
+        segment.compression_ratio is not None
+        and segment.compression_ratio > _MAX_COMPRESSION_RATIO
+    ):
+        return ILLEGIBLE_TEXT
+    return segment.text
 
 
 def _speaker_durations(turns: list[Turn]) -> dict[str, float]:
@@ -89,6 +117,8 @@ def assign_speakers(
     - Sin solape con ningún turno → `UNKNOWN_SPEAKER`.
     - `genders` (opcional): {speaker_id: "probable mujer"} → se añade a la
       etiqueta, p. ej. "Voz 1 (probable mujer)".
+    - El texto pasa por `display_text`: los tramos poco fiables se marcan como
+      `ILLEGIBLE_TEXT`.
     """
     principals = top_speakers(turns, max_speakers)
     label_map: dict[str, str] = {}
@@ -109,7 +139,9 @@ def assign_speakers(
             display = MINOR_SPEAKER
 
         result.append(
-            LabeledSegment(start=seg.start, end=seg.end, text=seg.text, speaker=display)
+            LabeledSegment(
+                start=seg.start, end=seg.end, text=display_text(seg), speaker=display
+            )
         )
 
     return result

@@ -18,12 +18,19 @@ class Segment:
 
     Tiempos en segundos desde el inicio del archivo. `language` puede ser
     None si el motor no lo expone o todavía no se ha detectado.
+
+    `avg_logprob` y `compression_ratio` son las métricas de calidad que Whisper
+    calcula al decodificar (ambos motores las exponen igual). Las consume
+    `merge.display_text` para marcar los tramos no fiables como ilegibles en vez
+    de dar por buena una transcripción inventada. None si el motor no las da.
     """
 
     text: str
     start: float
     end: float
     language: str | None = None
+    avg_logprob: float | None = None
+    compression_ratio: float | None = None
 
 
 class TranscriptionEngine(Protocol):
