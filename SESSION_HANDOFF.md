@@ -181,10 +181,17 @@ modelo CT2. Es un problema de empaquetado, no de código.
 - Persistencia en QSettings (`ui/amd_gpu_transcription`, default false).
 
 **SIN PROBAR EN HARDWARE.** Aquí no hay Radeon. 8 tests cubren la lógica, y el
-más importante es que **apagado no cambia absolutamente nada**. Falta la
-provisión automática del wheel ROCm: hoy hay que instalarlo a mano en el venv
-del backend. **NO SUBIDO A GITHUB** por decisión del Director: solo NAS, hasta
-validarlo en la máquina con la 6700 XT.
+más importante es que **apagado no cambia absolutamente nada** — por eso se
+publica sin validar: en cualquier máquina que no sea AMD, el interruptor ni
+siquiera se muestra. Falta la provisión automática del wheel ROCm: hoy hay que
+instalarlo a mano en el venv del backend.
+
+**Pendiente de validar por el Director** en una máquina AMD **reciente**
+(RDNA3 / RX 7000 en adelante, que es lo que el PR sí da por bueno; la 6700 XT
+es RDNA2 y su soporte está sin verificar por los propios autores). Alternativa
+sin comprar hardware: **AMD Developer Cloud** ofrece MI300X (CDNA3) gratis con
+el crédito del AI Developer Program — serviría como primera criba del código,
+pero NO valida RDNA2 ni el empaquetado de Windows.
 
 ### 11) CI: acciones actualizadas
 Las anotaciones avisaban de Node.js 20 obsoleto. Subidas a `checkout@v7`,
