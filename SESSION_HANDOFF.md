@@ -114,6 +114,39 @@ posible"* y las líneas van **sin etiqueta de hablante**. Ojo al probarlo: con e
 modelo ya en la caché de HF, un token inválido NO falla (no hace falta
 autenticarse), así que hay que forzar la excepción para ejercitar esta ruta.
 
+### 10) GPU AMD (ROCm): Whisper a CPU, diarización a la GPU
+A raíz de `guia_whisper_amd.md`. **La guía NO se adopta** (apunta a
+`openai-whisper`, que el proyecto abandonó, y ROCm no acelera nuestra
+transcripción porque faster-whisper corre sobre CTranslate2, que solo tiene
+backend CUDA/CPU). Pero destapó un **bug latente**: ROCm se presenta ante torch
+como `cuda`, así que en una Radeon `has_cuda()` daba True → `detect_engine()`
+devolvía `faster-cuda` → `WhisperModel(device="cuda")` → *"This CTranslate2
+package was not compiled with CUDA support"*. La app se caía donde antes habría
+usado CPU.
+
+Ahora hay tres preguntas separadas en `platform_info`:
+- `has_cuda()` → torch ve una GPU por el API `cuda` (**incluye ROCm**). La usa
+  `Diarizer`: pyannote corre sobre torch, así que una Radeon **acelera la
+  diarización sin cambio alguno** —que es la etapa cara—.
+- `has_nvidia()` → `torch.version.cuda` no nulo. La usan `detect_engine()` y
+  `FasterEngine`: CTranslate2 necesita NVIDIA de verdad.
+- `has_rocm()` → `torch.version.hip` no nulo.
+
+Reparto resultante en una máquina AMD: transcripción en **CPU** (int8, igual que
+cualquier Windows sin NVIDIA) y diarización + género en **GPU**. 7 tests
+simulando las tres clases de máquina. **SIN VERIFICAR EN HARDWARE REAL**: no hay
+Radeon disponible; la lógica está cubierta con mocks de `torch.version`.
+
+`whisper.cpp + Vulkan` (opción 2 de la guía) se descarta por lo mismo que
+parakeet.cpp en julio: segundo motor en C++ sin bindings, formato GGML aparte, y
+no elimina torch (pyannote lo necesita) así que tampoco adelgaza el instalador.
+
+### 11) CI: acciones actualizadas
+Las anotaciones avisaban de Node.js 20 obsoleto. Subidas a `checkout@v7`,
+`setup-python@v7`, `upload-artifact@v7`, `action-gh-release@v3`. Run verde en
+las tres plataformas (2m42s→3m11s en Windows) y **sin avisos de deprecación**.
+`action-gh-release@v3` NO se ha probado: ese paso solo corre con tags `v*`.
+
 ### Callejón sin salida documentado (no reintentar sin datos)
 Se probó exigir que el modelo wav2vec2 y el F0 **coincidieran** en el modo de
 género por frase (que tiene un **11% de etiquetas contradictorias** sobre el

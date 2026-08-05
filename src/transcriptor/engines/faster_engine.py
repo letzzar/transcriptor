@@ -14,7 +14,7 @@ from typing import Iterable
 
 from transcriptor.engines.base import Segment
 from transcriptor.models import downloader
-from transcriptor.platform_info import has_cuda
+from transcriptor.platform_info import has_nvidia
 
 
 class FasterEngine:
@@ -45,9 +45,16 @@ class FasterEngine:
         return self._model_id
 
     def _resolve_device(self) -> str:
+        """CUDA solo si es NVIDIA de verdad.
+
+        `has_nvidia` y no `has_cuda`: ROCm (AMD) se presenta ante torch como
+        `cuda`, pero CTranslate2 no tiene backend HIP y aborta con "not compiled
+        with CUDA support". En una Radeon se transcribe en CPU; la GPU se
+        aprovecha en la diarización, que sí corre sobre torch.
+        """
         if self._device != "auto":
             return self._device
-        return "cuda" if has_cuda() else "cpu"
+        return "cuda" if has_nvidia() else "cpu"
 
     def _resolve_compute_type(self, device: str) -> str:
         if self._compute_type != "auto":

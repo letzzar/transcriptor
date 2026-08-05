@@ -132,7 +132,7 @@ class Diarizer:
         self._pipeline: Any | None = None
 
     def _resolve_device(self) -> str:
-        """Mejor acelerador disponible: CUDA > MPS > CPU.
+        """Mejor acelerador disponible: CUDA/ROCm > MPS > CPU.
 
         La diarización es la etapa más cara del pipeline (en Mac se llevaba el
         96% del tiempo por correr en CPU). Medido en Apple Silicon con dos
@@ -141,6 +141,11 @@ class Diarizer:
         y 0,000 s de desviación. Que el resultado no cambie es condición
         indispensable aquí: un informe pericial no puede depender de en qué
         dispositivo se ejecutó.
+
+        Aquí se usa `has_cuda` (no `has_nvidia`) A PROPÓSITO: incluye AMD con
+        ROCm, que se presenta ante torch como `cuda`. Como pyannote corre sobre
+        torch, una Radeon acelera la diarización sin cambio alguno. Es al revés
+        que en el motor de Whisper, que necesita CUDA de NVIDIA de verdad.
         """
         if self._device != "auto":
             return self._device

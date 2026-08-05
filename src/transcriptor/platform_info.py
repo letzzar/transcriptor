@@ -26,10 +26,17 @@ def is_apple_silicon() -> bool:
 
 
 def has_cuda() -> bool:
-    """True si torch detecta una GPU NVIDIA disponible.
+    """True si torch puede usar una GPU a través de su API `cuda`.
 
-    Si torch no está instalado (caso F0: aún no es dependencia), devuelve False
-    sin romper. Esto permite ejecutar la UI antes de instalar los motores.
+    OJO: esto incluye **AMD con ROCm**, que se presenta ante torch como `cuda`
+    (ROCm traduce a HIP por debajo). Es la pregunta correcta para lo que corre
+    sobre torch —diarización con pyannote, género con wav2vec2—, que así
+    aprovecha una Radeon sin cambio alguno.
+
+    NO es la pregunta correcta para elegir el motor de Whisper: ver `has_nvidia`.
+
+    Si torch no está instalado (la UI arranca antes que el backend pesado),
+    devuelve False sin romper.
     """
     try:
         # El ignore cubre los entornos sin torch (F0); unused-ignore evita el
@@ -38,6 +45,34 @@ def has_cuda() -> bool:
     except ImportError:
         return False
     return bool(torch.cuda.is_available())
+
+
+def has_rocm() -> bool:
+    """True si la GPU que ve torch es AMD a través de ROCm."""
+    try:
+        import torch  # type: ignore[import-not-found,unused-ignore]
+    except ImportError:
+        return False
+    return bool(getattr(torch.version, "hip", None)) and bool(torch.cuda.is_available())
+
+
+def has_nvidia() -> bool:
+    """True si hay una GPU NVIDIA con CUDA de verdad.
+
+    Es la pregunta que debe hacerse **faster-whisper**: CTranslate2 se compila
+    contra el CUDA de NVIDIA y no tiene backend ROCm/HIP, así que en una Radeon
+    hay que transcribir en CPU aunque torch afirme que hay `cuda`. Sin esta
+    distinción, en una máquina AMD con ROCm el motor pedía `device="cuda"` y
+    CTranslate2 fallaba con "not compiled with CUDA support".
+
+    Se distingue por `torch.version.cuda` / `torch.version.hip`: en una build
+    ROCm el primero es None y el segundo trae la versión de HIP.
+    """
+    try:
+        import torch  # type: ignore[import-not-found,unused-ignore]
+    except ImportError:
+        return False
+    return bool(getattr(torch.version, "cuda", None)) and bool(torch.cuda.is_available())
 
 
 def has_mps() -> bool:
@@ -59,10 +94,15 @@ def has_mps() -> bool:
 
 
 def detect_engine() -> Engine:
-    """Selecciona el motor Whisper óptimo para esta máquina."""
+    """Selecciona el motor Whisper óptimo para esta máquina.
+
+    Usa `has_nvidia` y NO `has_cuda`: en una GPU AMD con ROCm, torch dice que
+    hay `cuda` pero CTranslate2 no puede usarla, así que Whisper va a CPU. La
+    Radeon sí se aprovecha en la diarización, que corre sobre torch.
+    """
     if is_apple_silicon():
         return "mlx"
-    if has_cuda():
+    if has_nvidia():
         return "faster-cuda"
     return "faster-cpu"
 
