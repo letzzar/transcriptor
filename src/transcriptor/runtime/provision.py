@@ -24,6 +24,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -35,6 +36,26 @@ from transcriptor.platform_info import is_apple_silicon, is_windows, no_window_c
 # (cu124 topa en torch 2.6 → ResolutionImpossible).
 CUDA_INDEX = "https://download.pytorch.org/whl/cu126"
 CPU_INDEX = "https://download.pytorch.org/whl/cpu"
+
+# GPU AMD (ROCm). Dos piezas independientes, y NO están disponibles en las
+# mismas plataformas:
+#
+#   torch+ROCm  → acelera diarización y género. SOLO LINUX: PyTorch no publica
+#                 wheels de ROCm para Windows (comprobado en rocm6.4/7.0/7.1).
+#   CTranslate2 → acelera la transcripción. Hay wheels de Linux Y de Windows,
+#                 pero NO en PyPI: van dentro de un .zip de la release de
+#                 GitHub, así que hay que descargarlos y descomprimirlos.
+#
+# Consecuencia práctica: en Windows+AMD lo único acelerable es la transcripción;
+# en Linux+AMD, todo. Se fija ROCm 7.1 porque es lo que apunta el wheel de
+# CTranslate2 (PR #1989) y mezclar runtimes de HIP distintos en un proceso da
+# problemas.
+ROCM_TORCH_INDEX = "https://download.pytorch.org/whl/rocm7.1"
+_CT2_VERSION = "4.8.1"
+_CT2_ROCM_URL = (
+    "https://github.com/OpenNMT/CTranslate2/releases/download/"
+    f"v{_CT2_VERSION}/rocm-python-wheels-{{os}}.zip"
+)
 
 # Paquetes pesados que NO van en el bundle y se instalan aquí, con versiones
 # FIJADAS a lo probado: el cliente recibe EXACTAMENTE el stack validado. Sin pin
@@ -52,7 +73,8 @@ MLX_PACKAGE = "mlx-whisper==0.4.3"
 
 # Versión del esquema de backend. Súbela al cambiar las versiones/layout de
 # arriba: el marcador deja de coincidir y el siguiente arranque reinstala.
-_BACKEND_SCHEMA = 3
+# 4: aparece la variante `rocm` (GPU AMD).
+_BACKEND_SCHEMA = 4
 
 _MARKER_NAME = ".provisioned"
 
@@ -221,6 +243,66 @@ def detect_gpu() -> bool:
     return result.returncode == 0
 
 
+def detect_amd_gpu() -> bool:
+    """True si hay una GPU AMD **con ROCm ya instalado**.
+
+    Se consulta `rocm-smi`, que viene con ROCm: su presencia significa que el
+    stack completo está montado, que es la precondición real. Una Radeon sin
+    ROCm no sirve de nada aquí, así que no interesa detectarla.
+
+    No usa torch (aún no está instalado en el primer arranque).
+    """
+    try:
+        result = subprocess.run(
+            ["rocm-smi"],
+            capture_output=True,
+            timeout=15,
+            check=False,  # el código de salida se interpreta, no es un error
+            creationflags=no_window_creationflags(),
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def _install_rocm_ctranslate2(pip_base: list[str], on_line: LineSink | None) -> None:
+    """Instala el CTranslate2 con soporte ROCm sobre el que puso pip.
+
+    El wheel no está en PyPI: viene en un `.zip` de la release de GitHub con
+    una copia por versión de Python. Se descarga, se extrae el que corresponde
+    al intérprete del backend y se fuerza encima del de PyPI (`--no-deps` para
+    no tocar el resto del árbol de dependencias, que ya está resuelto).
+    """
+    import urllib.request
+    import zipfile
+
+    sistema = "Windows" if is_windows() else "Linux"
+    url = _CT2_ROCM_URL.format(os=sistema)
+    tag = f"cp{sys.version_info.major}{sys.version_info.minor}"
+
+    if on_line:
+        on_line(f"Descargando CTranslate2 con ROCm ({sistema})…")
+    with tempfile.TemporaryDirectory() as tmp:
+        destino = Path(tmp) / "rocm.zip"
+        try:
+            urllib.request.urlretrieve(url, destino)  # URL fija de GitHub
+        except OSError as exc:
+            raise ProvisionError(
+                f"No se pudo descargar el CTranslate2 con ROCm desde {url}: {exc}"
+            ) from exc
+
+        with zipfile.ZipFile(destino) as z:
+            wheels = [n for n in z.namelist() if n.endswith(".whl") and f"-{tag}-" in n]
+            if not wheels:
+                raise ProvisionError(
+                    f"El paquete ROCm de CTranslate2 no trae un wheel para {tag}. "
+                    "Desactiva el modo GPU AMD para transcribir en CPU."
+                )
+            wheel = z.extract(wheels[0], tmp)
+
+        _run([*pip_base, "--force-reinstall", "--no-deps", wheel], on_line)
+
+
 def _run(cmd: list[str], on_line: LineSink | None) -> None:
     """Lanza un comando en streaming, reenviando cada línea a `on_line`."""
     proc = subprocess.Popen(
@@ -254,8 +336,20 @@ def provision(
     `ProvisionError` si algún paso falla.
     """
     exe = python_exe or embedded_python_exe()
-    variant = "cu126" if gpu else "cpu"
+    # NVIDIA manda; si no, se mira AMD; si no, CPU. La variante `rocm` cubre
+    # ambas plataformas, pero acelera cosas distintas en cada una (ver las
+    # constantes ROCM_*): en Windows solo la transcripción, en Linux también la
+    # diarización, porque allí sí existe torch+ROCm.
+    amd = not gpu and detect_amd_gpu()
+    if gpu:
+        variant = "cu126"
+    elif amd:
+        variant = "rocm"
+    else:
+        variant = "cpu"
     torch_index = CUDA_INDEX if gpu else CPU_INDEX
+    if amd and not is_windows():
+        torch_index = ROCM_TORCH_INDEX
 
     if not _venv_python().exists():
         # Instalación nueva o migración desde un layout anterior: partir limpio.
@@ -289,6 +383,11 @@ def provision(
         #    torch>=2.8 de pyannote sin re-descargarlo).
         _run([*pip_base, "--index-url", torch_index, "torch"], on_line)
         _run([*pip_base, *packages], on_line)
+
+    # El CTranslate2 de PyPI no trae GPU: se sustituye por el de ROCm. Va al
+    # final, después de que pip haya resuelto todo el árbol con el de PyPI.
+    if variant == "rocm" and offline_wheelhouse() is None:
+        _install_rocm_ctranslate2(pip_base, on_line)
 
     _marker_path().write_text(f"{variant}\n{_BACKEND_SCHEMA}\n", encoding="utf-8")
     return variant
@@ -412,9 +511,21 @@ def _main() -> int:
     else:
         gpu = detect_gpu()
 
+    amd = not gpu and detect_amd_gpu()
     print(f"GPU NVIDIA detectada: {gpu}")
+    print(f"GPU AMD con ROCm detectada: {amd}")
     print(f"Backend en: {backend_dir()}")
-    print(f"Variante a instalar: {'cu126 (CUDA)' if gpu else 'cpu'}")
+    if gpu:
+        destino = "cu126 (CUDA)"
+    elif amd:
+        destino = "rocm (AMD)" + (
+            " — solo transcripción: no hay torch+ROCm para Windows"
+            if is_windows()
+            else " — transcripción y diarización"
+        )
+    else:
+        destino = "cpu"
+    print(f"Variante a instalar: {destino}")
     print("Instalando (esto descarga ~2 GB la primera vez)...\n")
 
     try:

@@ -180,11 +180,29 @@ modelo CT2. Es un problema de empaquetado, no de código.
   CTranslate2 instalado trae GPU, y si no, explica que falta el wheel ROCm.
 - Persistencia en QSettings (`ui/amd_gpu_transcription`, default false).
 
-**SIN PROBAR EN HARDWARE.** Aquí no hay Radeon. 8 tests cubren la lógica, y el
-más importante es que **apagado no cambia absolutamente nada** — por eso se
-publica sin validar: en cualquier máquina que no sea AMD, el interruptor ni
-siquiera se muestra. Falta la provisión automática del wheel ROCm: hoy hay que
-instalarlo a mano en el venv del backend.
+**Provisión automática (`provision.py`, variante `rocm`).** Un hueco grave que
+se detectó al implementarla: sin ella, un cliente con Radeon recibía torch de
+CPU, así que **la diarización tampoco usaba la GPU** y todo el trabajo del punto
+10 no llegaba al usuario. Ahora `detect_amd_gpu()` (vía `rocm-smi`) elige la
+variante `rocm`, que instala:
+- **Linux**: torch desde `download.pytorch.org/whl/rocm7.1` (hay
+  `torch 2.13.0+rocm7.1` para cp313, misma versión que usamos) **+** el
+  CTranslate2 ROCm → se aceleran transcripción Y diarización.
+- **Windows**: torch se queda en **CPU** —PyTorch **NO publica wheels ROCm para
+  Windows**, comprobado en rocm6.4/7.0/7.1— y solo se sustituye CTranslate2 →
+  se acelera **solo la transcripción**.
+
+El wheel de CTranslate2 se descarga del `.zip` de la release y se instala con
+`--force-reinstall --no-deps` al final, cuando pip ya resolvió el árbol.
+Contenido del zip verificado leyendo su índice por rangos HTTP (sin bajar los
+131/271 MB): trae `cp39`…`cp314`, p. ej.
+`ctranslate2-4.8.1-cp313-cp313-win_amd64.whl` (20,6 MB). `_BACKEND_SCHEMA`
+sube a **4** para que los backends ya provisionados se reinstalen.
+
+**SIN PROBAR EN HARDWARE.** Aquí no hay Radeon. 13 tests cubren la lógica, y el
+más importante es que **apagado / sin AMD no cambia absolutamente nada** — por
+eso se publica sin validar: en cualquier máquina que no sea AMD, el interruptor
+ni siquiera se muestra y la variante sigue siendo `cpu`.
 
 **Pendiente de validar por el Director** en una máquina AMD **reciente**
 (RDNA3 / RX 7000 en adelante, que es lo que el PR sí da por bueno; la 6700 XT
