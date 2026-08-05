@@ -201,8 +201,10 @@ class TranscribeWorker(QThread):
                     self.log.emit(f"[{f.name}] {len(turns)} turnos, {speakers} hablante(s).")
                 except DiarizationError as e:
                     turns = None
-                    self.log.emit(f"[{f.name}] AVISO: diarización no disponible ({e}). "
-                                  "Se transcribe con un solo hablante.")
+                    self.log.emit(
+                        f"[{f.name}] AVISO: {e} El archivo se transcribe igualmente, "
+                        "sin separar interlocutores (queda anotado en el informe)."
+                    )
 
             # Transcripción.
             if first:

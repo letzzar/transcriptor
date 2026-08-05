@@ -77,7 +77,31 @@ DEFAULT_MODEL = "pyannote/speaker-diarization-community-1"
 
 
 class DiarizationError(RuntimeError):
-    """No se pudo cargar o ejecutar la diarización."""
+    """No se pudo cargar o ejecutar la diarización.
+
+    `Diarizer` garantiza que TODO fallo suyo sale como `DiarizationError`. Es lo
+    que permite al worker aplicar su modo degradado (transcribir sin separar
+    hablantes) en vez de perder el archivo: quien llama no tiene por qué saber
+    qué excepciones inventan `huggingface_hub`, `torch` o pyannote.
+    """
+
+
+def _explain(exc: Exception) -> str:
+    """Traduce un fallo de pyannote/HF a algo que el usuario pueda accionar."""
+    detalle = f"{type(exc).__name__}: {exc}"
+    pista = detalle.lower()
+    if any(s in pista for s in ("gated", "401", "403", "unauthorized", "authentication")):
+        return (
+            "HuggingFace rechazó el acceso al modelo de diarización. Casi siempre "
+            "es el token: compruébalo en Preferencias con 'Probar token' y acepta "
+            "las condiciones del modelo en huggingface.co."
+        )
+    if any(s in pista for s in ("connection", "timeout", "network", "dns", "resolve")):
+        return (
+            "No se pudo contactar con HuggingFace para obtener el modelo de "
+            "diarización. Comprueba la conexión."
+        )
+    return f"No se pudo preparar la diarización ({detalle})."
 
 
 def _load_waveform(wav: Path) -> tuple[torch.Tensor, int]:
@@ -145,26 +169,46 @@ class Diarizer:
                 "poder identificar los hablantes."
             )
 
-        pipeline = Pipeline.from_pretrained(self._model, token=token)
+        # `from_pretrained` no lanza DiarizationError: propaga lo que le venga de
+        # huggingface_hub (GatedRepoError con un token caducado, errores de red…).
+        # Se traduce aquí para que el worker pueda degradar en vez de perder el
+        # archivo; sin esto, un token vencido tiraba la transcripción entera.
+        try:
+            pipeline = Pipeline.from_pretrained(self._model, token=token)
+        except Exception as exc:  # se reclasifica, no se traga
+            raise DiarizationError(_explain(exc)) from exc
+
         if pipeline is None:
             raise DiarizationError(
                 f"No se pudo cargar '{self._model}'. Acepta las condiciones del "
                 "modelo en huggingface.co y verifica que tu token tiene acceso."
             )
 
-        pipeline.to(torch.device(self._resolve_device()))
+        try:
+            pipeline.to(torch.device(self._resolve_device()))
+        except Exception as exc:  # idem (device no disponible)
+            raise DiarizationError(_explain(exc)) from exc
+
         self._pipeline = pipeline
         return pipeline
 
     def run(self, wav: Path) -> list[Turn]:
-        """Diariza un WAV y devuelve sus turnos ordenados por aparición."""
+        """Diariza un WAV y devuelve sus turnos ordenados por aparición.
+
+        Raises:
+            DiarizationError: ante CUALQUIER fallo (carga, lectura o inferencia).
+                Es lo que permite al worker seguir adelante sin el archivo.
+        """
         pipeline = self.load()
-        waveform, sample_rate = _load_waveform(wav)
-        output = pipeline({"waveform": waveform, "sample_rate": sample_rate})
-        # pyannote 4.x devuelve un `DiarizeOutput` con `.speaker_diarization`
-        # (Annotation); versiones legacy devuelven el Annotation directamente.
-        annotation = getattr(output, "speaker_diarization", output)
-        return [
-            Turn(speaker=speaker, start=float(segment.start), end=float(segment.end))
-            for segment, _, speaker in annotation.itertracks(yield_label=True)
-        ]
+        try:
+            waveform, sample_rate = _load_waveform(wav)
+            output = pipeline({"waveform": waveform, "sample_rate": sample_rate})
+            # pyannote 4.x devuelve un `DiarizeOutput` con `.speaker_diarization`
+            # (Annotation); versiones legacy devuelven el Annotation directamente.
+            annotation = getattr(output, "speaker_diarization", output)
+            return [
+                Turn(speaker=speaker, start=float(segment.start), end=float(segment.end))
+                for segment, _, speaker in annotation.itertracks(yield_label=True)
+            ]
+        except Exception as exc:  # se reclasifica, no se traga
+            raise DiarizationError(_explain(exc)) from exc

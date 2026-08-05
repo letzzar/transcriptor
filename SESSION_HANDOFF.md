@@ -99,6 +99,21 @@ La puerta de ruido estaba a **-30 dB** y el audio real del Director promedia
 **-31,9 dB**: se comía la voz. Ahora `dynaudnorm` + puerta a **-45 dB**. Medido:
 el nivel sube de -31,9 a -22,6 dB.
 
+### 9) Un fallo de diarización ya no se lleva el archivo
+`Diarizer` garantiza ahora que **todo** fallo suyo sale como `DiarizationError`
+(carga, envío al device e inferencia), que es lo único que el worker captura
+para aplicar su modo degradado. Antes, `Pipeline.from_pretrained` propagaba
+`GatedRepoError` de `huggingface_hub` —token caducado—, que escapaba al `except`
+general y **perdía el archivo entero**: le pasó al Director con 3 audios.
+`_explain()` traduce además el error a algo accionable ("compruébalo en
+Preferencias con 'Probar token'") en vez de escupir un 401.
+
+Reproducido y verificado forzando el fallo: se genera el informe (86 segmentos),
+el log avisa, la cabecera dice *"se intentó separar los interlocutores y NO fue
+posible"* y las líneas van **sin etiqueta de hablante**. Ojo al probarlo: con el
+modelo ya en la caché de HF, un token inválido NO falla (no hace falta
+autenticarse), así que hay que forzar la excepción para ejercitar esta ruta.
+
 ### Callejón sin salida documentado (no reintentar sin datos)
 Se probó exigir que el modelo wav2vec2 y el F0 **coincidieran** en el modo de
 género por frase (que tiene un **11% de etiquetas contradictorias** sobre el
@@ -112,11 +127,7 @@ aviso de cabecera es la protección real. Documentado en el docstring de
 - **Push a `nas` y a `origin`** (no hecho; decisión del Director).
 - **Probar en Windows**: `faster_engine` lleva ahora `temperature=0`,
   `condition_on_previous_text=False` y `multilingual=True`. Sin verificar allí.
-- **Fallo de diarización se lleva el archivo entero**: `transcribe_worker` solo
-  captura `DiarizationError`, pero `Pipeline.from_pretrained` lanza
-  `GatedRepoError` de `huggingface_hub`, que escapa al `except` general y pierde
-  el archivo en vez de caer al modo sin hablantes. Detectado con un token
-  caducado; arreglo estimado: 3 líneas en `diarization.py`.
+- ~~Fallo de diarización se lleva el archivo entero~~ **ARREGLADO** (ver abajo).
 - **Género por frase: 11% de error irreducible.** Si el sexo importa en el
   peritaje, usar el modo con separación de voces (acumula 60 s por hablante).
 - WA0002 conserva 2 tramos de idioma dudosos (`pt` 16-18 min, `is` 31-33,5 min)
