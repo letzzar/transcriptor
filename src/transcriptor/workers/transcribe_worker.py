@@ -124,6 +124,7 @@ class TranscribeWorker(QThread):
         enhance: bool,
         language: str | None,
         mode: AnalysisMode = AnalysisMode.SPEAKERS_GENDER,
+        amd_gpu: bool = False,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -133,6 +134,10 @@ class TranscribeWorker(QThread):
         self._enhance = enhance
         self._language = language
         self._mode = mode
+        # Modo EXPERIMENTAL de transcripción en GPU AMD (ROCm), a petición del
+        # usuario. No se deduce del hardware: exige un CTranslate2 que no viene
+        # de PyPI, así que activarlo solo si el usuario sabe lo que hace.
+        self._amd_gpu = amd_gpu
 
     def _audio_files(self) -> list[Path]:
         return sorted(
@@ -150,7 +155,7 @@ class TranscribeWorker(QThread):
                 return
 
             self.log.emit(f"{len(files)} archivo(s) a procesar con modelo '{self._model_id}'.")
-            engine = make_engine(self._model_id)
+            engine = make_engine(self._model_id, amd_gpu=self._amd_gpu)
             diarizer = Diarizer() if self._mode.needs_diarization else None
             gender_clf = gender.GenderClassifier() if self._mode.needs_gender else None
             entries: list[txt.SummaryEntry] = []

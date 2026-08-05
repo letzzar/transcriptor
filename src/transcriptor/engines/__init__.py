@@ -18,8 +18,15 @@ from transcriptor.platform_info import detect_engine
 __all__ = ["Segment", "TranscriptionEngine", "make_engine"]
 
 
-def make_engine(model_id: str = "large-v3-turbo") -> TranscriptionEngine:
-    """Crea el motor óptimo para esta plataforma."""
+def make_engine(
+    model_id: str = "large-v3-turbo", *, amd_gpu: bool = False
+) -> TranscriptionEngine:
+    """Crea el motor óptimo para esta plataforma.
+
+    `amd_gpu` activa el modo EXPERIMENTAL de transcripción en GPU AMD (ROCm).
+    Solo lo pasa la UI cuando el usuario lo enciende a mano; no se deduce del
+    hardware, porque requiere un CTranslate2 que no viene de PyPI.
+    """
     if detect_engine() == "mlx":
         from transcriptor.engines.mlx_engine import MlxEngine
 
@@ -27,4 +34,4 @@ def make_engine(model_id: str = "large-v3-turbo") -> TranscriptionEngine:
 
     from transcriptor.engines.faster_engine import FasterEngine
 
-    return FasterEngine(model_id)
+    return FasterEngine(model_id, amd_gpu=amd_gpu)

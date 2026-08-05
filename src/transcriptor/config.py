@@ -147,6 +147,24 @@ def set_analysis_mode(mode: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Transcripción en GPU AMD (EXPERIMENTAL)
+# ---------------------------------------------------------------------------
+
+def get_amd_gpu_transcription() -> bool:
+    """Si el usuario activó la transcripción en GPU AMD (ROCm).
+
+    Por defecto **False**, y a propósito: el soporte ROCm de CTranslate2 es
+    reciente (fusionado en feb-2026) y su propio autor advierte de que RDNA2
+    —las Radeon RX 6000— está sin probar. Se activa a mano y bajo advertencia.
+    """
+    return str(_settings().value("ui/amd_gpu_transcription", "false")).lower() == "true"
+
+
+def set_amd_gpu_transcription(enabled: bool) -> None:
+    _settings().setValue("ui/amd_gpu_transcription", "true" if enabled else "false")
+
+
+# ---------------------------------------------------------------------------
 # Modelo preferido
 # ---------------------------------------------------------------------------
 

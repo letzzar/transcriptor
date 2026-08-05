@@ -9,6 +9,7 @@ Devuelve uno de:
 from __future__ import annotations
 
 import platform as _platform
+import subprocess
 import sys
 from typing import Literal
 
@@ -91,6 +92,75 @@ def has_mps() -> bool:
         return False
     backend = getattr(torch.backends, "mps", None)
     return bool(backend is not None and backend.is_available())
+
+
+def has_amd_gpu() -> bool:
+    """True si el equipo tiene una GPU AMD/Radeon.
+
+    No usa torch: se consulta al sistema, porque esto se pregunta desde la UI,
+    que arranca antes que el backend pesado. Cualquier fallo de la consulta se
+    interpreta como "no hay": es preferible no ofrecer el modo experimental que
+    ofrecerlo donde no puede funcionar.
+    """
+    if sys.platform == "darwin":
+        return False  # ROCm no existe en macOS
+    if is_windows():
+        try:
+            salida = subprocess.run(
+                ["wmic", "path", "win32_VideoController", "get", "name"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                creationflags=no_window_creationflags(),
+            ).stdout
+        except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+            return False
+        return any(m in salida.lower() for m in ("amd", "radeon"))
+    # Linux: el identificador de fabricante PCI de AMD es 0x1002.
+    try:
+        from pathlib import Path as _Path
+
+        for vendor in _Path("/sys/class/drm").glob("card*/device/vendor"):
+            if vendor.read_text().strip().lower() == "0x1002":
+                return True
+    except OSError:
+        return False
+    return False
+
+
+def has_rocm_runtime() -> bool:
+    """True si el runtime de ROCm está instalado y responde.
+
+    `rocm-smi` viene con ROCm, así que su presencia es buena señal de que el
+    stack completo está montado —que es justo la precondición del modo AMD—.
+    """
+    try:
+        result = subprocess.run(
+            ["rocm-smi"],
+            capture_output=True,
+            timeout=15,
+            creationflags=no_window_creationflags(),
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def ctranslate2_supports_gpu() -> bool:
+    """True si el CTranslate2 instalado se compiló con soporte de GPU.
+
+    El paquete de PyPI viene sin él (o solo con CUDA de NVIDIA); el modo AMD
+    exige el wheel ROCm de las releases de CTranslate2. Comprobarlo ANTES de
+    transcribir evita que el usuario descubra el problema a mitad de un trabajo
+    largo.
+    """
+    try:
+        import ctranslate2  # type: ignore[import-not-found,unused-ignore]
+
+        ctranslate2.get_supported_compute_types("cuda")
+    except Exception:  # noqa: BLE001 — ausencia o build sin GPU: da igual cuál
+        return False
+    return True
 
 
 def detect_engine() -> Engine:

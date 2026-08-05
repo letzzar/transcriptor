@@ -36,7 +36,13 @@ from PySide6.QtWidgets import (
 from transcriptor import __version__, config
 from transcriptor.models import downloader, registry
 from transcriptor.pipeline import audio
-from transcriptor.platform_info import detect_engine, detect_os, engine_label
+from transcriptor.platform_info import (
+    detect_engine,
+    detect_os,
+    engine_label,
+    has_amd_gpu,
+    has_rocm_runtime,
+)
 from transcriptor.runtime import provision
 from transcriptor.ui.model_manager import RECOMMENDED_MODEL, ModelManagerDialog
 from transcriptor.ui.settings_dialog import SettingsDialog
@@ -188,6 +194,33 @@ class MainWindow(QMainWindow):
         max_row.addWidget(self.spin_speakers)
         max_row.addStretch()
         opts_layout.addLayout(max_row)
+
+        # Modo AMD: solo se muestra donde puede tener sentido (hay una Radeon).
+        # Apagado por defecto y marcado como experimental: el soporte ROCm de
+        # CTranslate2 es de feb-2026 y su autor advierte de que RDNA2 (RX 6000)
+        # está sin probar.
+        self.tgl_amd: LabeledToggle | None = None
+        if has_amd_gpu():
+            rocm = has_rocm_runtime()
+            self.tgl_amd = LabeledToggle(
+                "Transcribir en GPU AMD  ⚠ EXPERIMENTAL",
+                checked=config.get_amd_gpu_transcription() and rocm,
+                tooltip=(
+                    "Usa la Radeon para transcribir en vez de la CPU.\n\n"
+                    "EXPERIMENTAL: requiere el wheel ROCm de CTranslate2 (no está "
+                    "en PyPI) y el runtime ROCm 7.1.1. El soporte de RDNA2 "
+                    "(Radeon RX 6000) no está verificado por sus autores.\n\n"
+                    "La separación de voces YA usa la GPU AMD, con esto o sin esto."
+                ),
+            )
+            if not rocm:
+                self.tgl_amd.setEnabled(False)
+                self.tgl_amd.setToolTip(
+                    "No se detecta el runtime de ROCm (`rocm-smi`). Instala "
+                    "ROCm 7.1.1 para poder activar este modo."
+                )
+            opts_layout.addWidget(self.tgl_amd)
+
         layout.addWidget(opts_box)
 
         self._update_cost_hint()
@@ -301,6 +334,8 @@ class MainWindow(QMainWindow):
         self.tgl_auto_speakers.setEnabled(not running)
         self.spin_speakers.setEnabled(not running and not self.tgl_auto_speakers.isChecked())
         self.tgl_clean.setEnabled(not running)
+        if self.tgl_amd is not None and has_rocm_runtime():
+            self.tgl_amd.setEnabled(not running)
         for boton in self.mode_group.buttons():
             boton.setEnabled(not running)
         self.btn_cancel.setVisible(running)
@@ -418,6 +453,12 @@ class MainWindow(QMainWindow):
         )
         modo = self._current_mode()
         config.set_analysis_mode(modo)
+        amd = self.tgl_amd is not None and self.tgl_amd.isChecked()
+        config.set_amd_gpu_transcription(amd)
+        if amd:
+            self._append_log(
+                "AVISO: transcripción en GPU AMD activada (modo experimental)."
+            )
         worker = TranscribeWorker(
             self._folder,
             model_id=model_id,
@@ -425,6 +466,7 @@ class MainWindow(QMainWindow):
             enhance=self.tgl_clean.isChecked(),
             language=None if language == "auto" else language,
             mode=modo,
+            amd_gpu=amd,
             parent=self,
         )
         worker.status.connect(self.lbl_status.setText)

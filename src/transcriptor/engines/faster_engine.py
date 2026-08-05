@@ -14,7 +14,7 @@ from typing import Iterable
 
 from transcriptor.engines.base import Segment
 from transcriptor.models import downloader
-from transcriptor.platform_info import has_nvidia
+from transcriptor.platform_info import ctranslate2_supports_gpu, has_nvidia
 
 
 class FasterEngine:
@@ -31,10 +31,13 @@ class FasterEngine:
         *,
         device: str = "auto",
         compute_type: str = "auto",
+        amd_gpu: bool = False,
     ) -> None:
         self._model_id = model_id
         self._device = device
         self._compute_type = compute_type
+        # Modo AMD experimental, activado por el usuario en la UI.
+        self._amd_gpu = amd_gpu
         self._model_path: Path | None = None
         # WhisperModel cargado de forma diferida; tipado laxo porque
         # faster-whisper no expone stubs.
@@ -45,16 +48,39 @@ class FasterEngine:
         return self._model_id
 
     def _resolve_device(self) -> str:
-        """CUDA solo si es NVIDIA de verdad.
+        """CUDA solo si es NVIDIA de verdad, o si el usuario activó el modo AMD.
 
-        `has_nvidia` y no `has_cuda`: ROCm (AMD) se presenta ante torch como
-        `cuda`, pero CTranslate2 no tiene backend HIP y aborta con "not compiled
-        with CUDA support". En una Radeon se transcribe en CPU; la GPU se
-        aprovecha en la diarización, que sí corre sobre torch.
+        `has_nvidia` y no `has_cuda`: ROCm se presenta ante torch como `cuda`,
+        pero el CTranslate2 de PyPI no tiene backend HIP y aborta con "not
+        compiled with CUDA support". En una Radeon se transcribe en CPU y la GPU
+        se aprovecha en la diarización, que sí corre sobre torch.
+
+        EXCEPCIÓN: el modo AMD experimental. CTranslate2 fusionó soporte ROCm en
+        feb-2026 y publica wheels (no en PyPI: van en las releases de GitHub).
+        Con ese wheel instalado, el device sigue llamándose "cuda" y HIP lo
+        traduce. Solo se activa si el usuario lo pide expresamente.
         """
         if self._device != "auto":
             return self._device
-        return "cuda" if has_nvidia() else "cpu"
+        if has_nvidia():
+            return "cuda"
+        if self._amd_gpu:
+            return "cuda"  # el wheel ROCm expone HIP bajo el mismo nombre
+        return "cpu"
+
+    def _check_amd_ready(self) -> None:
+        """Falla pronto y con un mensaje útil si el modo AMD no puede funcionar.
+
+        Sin esto, el usuario descubriría el problema a mitad de un trabajo largo
+        con un `ValueError` de CTranslate2 que no dice qué hacer.
+        """
+        if not ctranslate2_supports_gpu():
+            raise RuntimeError(
+                "El modo GPU AMD (experimental) está activado, pero el "
+                "CTranslate2 instalado no trae soporte de GPU. Hace falta el "
+                "wheel ROCm de las releases de CTranslate2 (no está en PyPI) y "
+                "el runtime ROCm 7.1.1. Desactiva el modo para transcribir en CPU."
+            )
 
     def _resolve_compute_type(self, device: str) -> str:
         if self._compute_type != "auto":
@@ -76,6 +102,8 @@ class FasterEngine:
             # Import diferido: faster-whisper no se instala en Mac Apple Silicon.
             from faster_whisper import WhisperModel
 
+            if self._amd_gpu:
+                self._check_amd_ready()
             model_path = self.ensure_model()
             device = self._resolve_device()
             compute_type = self._resolve_compute_type(device)

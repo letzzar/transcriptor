@@ -141,6 +141,51 @@ Radeon disponible; la lógica está cubierta con mocks de `torch.version`.
 parakeet.cpp en julio: segundo motor en C++ sin bindings, formato GGML aparte, y
 no elimina torch (pyannote lo necesita) así que tampoco adelgaza el instalador.
 
+### 10 bis) Modo EXPERIMENTAL: transcribir en GPU AMD (ROCm)
+
+**Investigación (corrige lo dicho en el punto 10):** CTranslate2 **sí** tiene
+soporte ROCm. No es un fork: el PR
+[#1989](https://github.com/OpenNMT/CTranslate2/pull/1989) *"Introduce AMD GPU
+support with ROCm HIP"* se fusionó el **2026-02-02**, y las releases v4.7.1,
+v4.8.0 y **v4.8.1 —la versión que usamos—** publican
+`rocm-python-wheels-Linux.zip` (271 MB) y `rocm-python-wheels-Windows.zip`
+(131 MB). Lo mejor: **`FasterEngine` no cambia**; misma API, mismo formato de
+modelo CT2. Es un problema de empaquetado, no de código.
+
+**Fricciones reales:**
+- Los wheels **NO están en PyPI** (`pip install ctranslate2-rocm` → 404). Van en
+  un `.zip` de una release de GitHub, así que provisionarlos exige descargar y
+  descomprimir, no `pip install`.
+- Requieren **ROCm 7.1.1** en la máquina del cliente y, en Windows, instalar
+  aparte `rocm_sdk_libraries_custom`. Rompe nuestra premisa de que el usuario no
+  instala nada (la ruta CUDA funciona porque los wheels traen el runtime).
+- El autor del PR: *"unsure about **rdna2**, this pr should work but its support
+  seems bad and I don't have any to test"*. **RDNA2 = Radeon RX 6000**, que es
+  justo la máquina de pruebas del Director (**6700 XT**). En el hilo del issue
+  [#1370](https://github.com/SYSTRAN/faster-whisper/issues/1370) alguien lo
+  intentó **con una 6700 XT** y se rindió; su diagnóstico final fue tener
+  **drivers ROCm 6.x en vez de 7.x**. → Instalar **ROCm 7.1.1**, no 6.
+- Sin optimizar aún (*"flash attention for the future"*). Adopción fina: 186
+  descargas del zip de Windows.
+
+**Lo implementado (decisión del Director): interruptor experimental.**
+- `platform_info`: `has_amd_gpu()` (wmic en Windows, vendor PCI `0x1002` en
+  Linux, False en macOS), `has_rocm_runtime()` (`rocm-smi`) y
+  `ctranslate2_supports_gpu()`. Ninguna usa torch: la UI arranca antes.
+- UI: `LabeledToggle` "Transcribir en GPU AMD ⚠ EXPERIMENTAL" que **solo se
+  muestra si hay Radeon**, va **APAGADO por defecto** y queda **deshabilitado si
+  no hay ROCm**, con un tooltip que dice qué instalar.
+- `FasterEngine(amd_gpu=True)` → `device="cuda"` (el wheel ROCm expone HIP con
+  ese mismo nombre). `_check_amd_ready()` verifica ANTES de empezar que el
+  CTranslate2 instalado trae GPU, y si no, explica que falta el wheel ROCm.
+- Persistencia en QSettings (`ui/amd_gpu_transcription`, default false).
+
+**SIN PROBAR EN HARDWARE.** Aquí no hay Radeon. 8 tests cubren la lógica, y el
+más importante es que **apagado no cambia absolutamente nada**. Falta la
+provisión automática del wheel ROCm: hoy hay que instalarlo a mano en el venv
+del backend. **NO SUBIDO A GITHUB** por decisión del Director: solo NAS, hasta
+validarlo en la máquina con la 6700 XT.
+
 ### 11) CI: acciones actualizadas
 Las anotaciones avisaban de Node.js 20 obsoleto. Subidas a `checkout@v7`,
 `setup-python@v7`, `upload-artifact@v7`, `action-gh-release@v3`. Run verde en

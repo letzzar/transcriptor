@@ -73,5 +73,5 @@ strict = true
 [[tool.mypy.overrides]]
 # `mlx_whisper.*` cubre también los submódulos (audio, decoding, load_models),
 # que usa la detección de idioma por ventana de `engines/mlx_engine.py`.
-module = ["mlx_whisper", "mlx_whisper.*", "faster_whisper", "tqdm"]
+module = ["mlx_whisper", "mlx_whisper.*", "faster_whisper", "ctranslate2", "tqdm"]
 ignore_missing_imports = true
