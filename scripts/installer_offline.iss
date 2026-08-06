@@ -16,7 +16,7 @@
 ; Salida:    dist\Transcriptor-Setup-Offline.exe
 
 #define AppName "Transcriptor"
-#define AppVersion "0.2.0"
+#define AppVersion "0.9.0"
 #define AppPublisher "letzzar"
 #define DistDir "..\dist\Transcriptor"
 #define PayloadDir "..\dist\offline_payload"

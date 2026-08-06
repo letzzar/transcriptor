@@ -4,6 +4,30 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
+## ✅ (2026-08-06, Mac) — Unificación en `main` y versión 0.9.0
+
+Petición del Director: unificar todo el proyecto en `main` con la versión 0.9.
+
+- **Versión 0.2.0 → 0.9.0** en los 5 sitios donde está fijada a mano:
+  `pyproject.toml`, `src/transcriptor/__init__.py`, `scripts/installer.iss`,
+  `scripts/installer_offline.iss` y el `CFBundleShortVersionString` del
+  `.app` en `scripts/transcriptor.spec`. `scripts/package_linux.sh` **no** se
+  toca: lee la versión de `pyproject.toml`, así que los nombres del AppImage,
+  `.deb` y `.rpm` pasan a 0.9.0 solos.
+- **`main` = `feat/f3-f4-f6`** por fast-forward (main no tenía nada propio;
+  estaba 12 commits por detrás, desde `5db8fe2`). Ambas ramas quedan idénticas
+  y pusheadas a `origin` (GitHub) y a `nas`.
+- Verificado tras el cambio: 80 tests en verde y `import transcriptor` da
+  0.9.0. Los avisos de `ruff` (21 en `src`) siguen siendo los preexistentes de
+  la sesión anterior, ninguno nuevo.
+
+**NO se ha publicado release.** Sigue haciendo falta `git tag v0.9.0 &&
+git push origin v0.9.0` para que el CI genere y publique los instaladores; es
+decisión del Director, sobre todo con las validaciones que quedan abiertas más
+abajo (motor en Windows, hardware AMD, instaladores de Linux sin instalar).
+
+---
+
 ## ✅ CERRADA (2026-08-05/06, Mac) — Cuelgue por memoria, transcripción determinista, idioma por ventana, 4 modos, diarización en MPS, soporte AMD e instaladores Linux
 
 > **SESIÓN CERRADA.** Todo commiteado y **pusheado a `nas` y a `origin`**

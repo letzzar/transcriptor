@@ -113,7 +113,7 @@ if sys.platform == 'darwin':
         icon=os.path.join(ROOT, 'src/transcriptor/resources/logo_app.icns'),
         bundle_identifier='com.letzzar.transcriptor',
         info_plist={
-            'CFBundleShortVersionString': '0.2.0',
+            'CFBundleShortVersionString': '0.9.0',
             'NSHighResolutionCapable': True,
         },
     )
