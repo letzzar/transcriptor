@@ -16,19 +16,23 @@ Petición del Director: unificar todo el proyecto en `main` con la versión 0.9.
   `.deb` y `.rpm` pasan a 0.9.0 solos.
 - **`main` = `feat/f3-f4-f6`** por fast-forward (main no tenía nada propio;
   estaba 12 commits por detrás, desde `5db8fe2`). Ambas ramas quedan idénticas
-  y pusheadas a `origin` (GitHub).
-- ⚠️ **El `nas` NO se ha actualizado**: `/Volumes/Software` no estaba montado en
-  esta sesión. La copia del NAS sigue en `b5d2bb9` (main) / `6999858`
-  (`feat/f3-f4-f6`). **Al retomar con el NAS montado:**
-  `git push nas main feat/f3-f4-f6`. Mientras tanto, `origin` es la referencia.
+  y pusheadas a `origin` (GitHub) **y a `nas`** (el volumen se montó a mitad de
+  sesión; `updateInstead` refrescó también su working tree, que quedó limpio).
 - Verificado tras el cambio: 80 tests en verde y `import transcriptor` da
   0.9.0. Los avisos de `ruff` (21 en `src`) siguen siendo los preexistentes de
   la sesión anterior, ninguno nuevo.
 
-**NO se ha publicado release.** Sigue haciendo falta `git tag v0.9.0 &&
-git push origin v0.9.0` para que el CI genere y publique los instaladores; es
-decisión del Director, sobre todo con las validaciones que quedan abiertas más
-abajo (motor en Windows, hardware AMD, instaladores de Linux sin instalar).
+**Release `v0.9.0` publicada** (decisión del Director): tag anotado sobre este
+commit y pusheado a `origin`, lo que dispara los tres jobs del CI y adjunta a la
+Release los 6 artefactos (`Transcriptor-Setup.exe`, DMG, tar.gz, AppImage, `.deb`
+y `.rpm`). Es la primera vez que se ejercita `softprops/action-gh-release@v3`
+—hasta ahora ese paso nunca había corrido—, y los tres jobs escriben sobre la
+misma Release en paralelo.
+
+**Se publica con las validaciones de la sesión anterior todavía abiertas**
+(motor sin ejecutar en Windows, modo AMD sin hardware, instaladores de Linux
+construidos pero nunca instalados). Están detalladas en el "PENDIENTE" de la
+entrada siguiente y siguen siendo lo primero al retomar.
 
 ---
 
