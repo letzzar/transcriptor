@@ -16,7 +16,11 @@ Petición del Director: unificar todo el proyecto en `main` con la versión 0.9.
   `.deb` y `.rpm` pasan a 0.9.0 solos.
 - **`main` = `feat/f3-f4-f6`** por fast-forward (main no tenía nada propio;
   estaba 12 commits por detrás, desde `5db8fe2`). Ambas ramas quedan idénticas
-  y pusheadas a `origin` (GitHub) y a `nas`.
+  y pusheadas a `origin` (GitHub).
+- ⚠️ **El `nas` NO se ha actualizado**: `/Volumes/Software` no estaba montado en
+  esta sesión. La copia del NAS sigue en `b5d2bb9` (main) / `6999858`
+  (`feat/f3-f4-f6`). **Al retomar con el NAS montado:**
+  `git push nas main feat/f3-f4-f6`. Mientras tanto, `origin` es la referencia.
 - Verificado tras el cambio: 80 tests en verde y `import transcriptor` da
   0.9.0. Los avisos de `ruff` (21 en `src`) siguen siendo los preexistentes de
   la sesión anterior, ninguno nuevo.
