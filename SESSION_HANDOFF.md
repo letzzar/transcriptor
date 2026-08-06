@@ -15,9 +15,18 @@ Petición del Director: unificar todo el proyecto en `main` con la versión 0.9.
   toca: lee la versión de `pyproject.toml`, así que los nombres del AppImage,
   `.deb` y `.rpm` pasan a 0.9.0 solos.
 - **`main` = `feat/f3-f4-f6`** por fast-forward (main no tenía nada propio;
-  estaba 12 commits por detrás, desde `5db8fe2`). Ambas ramas quedan idénticas
-  y pusheadas a `origin` (GitHub) **y a `nas`** (el volumen se montó a mitad de
-  sesión; `updateInstead` refrescó también su working tree, que quedó limpio).
+  estaba 12 commits por detrás, desde `5db8fe2`), pusheada a `origin` (GitHub)
+  **y a `nas`** (el volumen se montó a mitad de sesión; `updateInstead` refrescó
+  también su working tree, que quedó limpio).
+- **`feat/f3-f4-f6` BORRADA.** Se comprobó antes que `main..feat/f3-f4-f6`
+  estaba vacío (los 6 refs en `1caf29e`, nada exclusivo). Los dos repos —Mac y
+  NAS— se pasaron a `main` **antes** de borrarla (en el NAS era la rama activa;
+  borrarla con HEAD apuntando a ella habría dejado el repo roto), y se
+  reapuntaron los `HEAD` remotos con `git remote set-head`. **A partir de ahora
+  se trabaja en `main`**; la copia de build `D:` en Windows también hay que
+  pasarla a `main` (`git checkout main` allí) la próxima sesión Windows.
+- El workflow sigue disparándose con `branches: [main, "feat/**"]`. Se deja tal
+  cual: `feat/**` no estorba y sirve para futuras ramas de trabajo.
 - Verificado tras el cambio: 80 tests en verde y `import transcriptor` da
   0.9.0. Los avisos de `ruff` (21 en `src`) siguen siendo los preexistentes de
   la sesión anterior, ninguno nuevo.
