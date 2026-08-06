@@ -139,15 +139,35 @@ jobs:
       - name: Empaquetar tar.gz
         run: tar -C dist -czf dist/Transcriptor-linux-x86_64.tar.gz Transcriptor
 
+      # AppImage (un archivo, cualquier distro) + .deb y .rpm, que además
+      # declaran las libs de Qt como dependencias: el tar.gz no puede, y sin
+      # ellas la app fallaba con errores crípticos (p. ej. libxcb-cursor0).
+      # `rpm` trae rpmbuild, que fpm necesita para el .rpm (no viene en el runner).
+      - name: Instalar fpm y rpmbuild
+        run: |
+          sudo apt-get install -y rpm
+          sudo gem install --no-document fpm
+
+      - name: Empaquetar AppImage, .deb y .rpm
+        run: bash scripts/package_linux.sh
+
       - name: Subir artefacto
         uses: actions/upload-artifact@v7
         with:
           name: Transcriptor-linux-x86_64
-          path: dist/Transcriptor-linux-x86_64.tar.gz
+          path: |
+            dist/Transcriptor-linux-x86_64.tar.gz
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
           if-no-files-found: error
 
       - name: Publicar Release (solo tags)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
-          files: dist/Transcriptor-linux-x86_64.tar.gz
+          files: |
+            dist/Transcriptor-linux-x86_64.tar.gz
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
