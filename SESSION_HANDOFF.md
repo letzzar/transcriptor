@@ -4,13 +4,14 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
-## ✅ CERRADA (2026-08-05, Mac) — Cuelgue por memoria, transcripción determinista, idioma por ventana, 4 modos y diarización en MPS
+## ✅ CERRADA (2026-08-05/06, Mac) — Cuelgue por memoria, transcripción determinista, idioma por ventana, 4 modos, diarización en MPS, soporte AMD e instaladores Linux
 
-> **SESIÓN CERRADA.** Todo commiteado en `feat/f3-f4-f6`. **Pendiente de decidir
-> por el Director:** hacer push a `nas` y a `origin` (GitHub), y probar en
-> Windows que los cambios de motor no rompen nada allí (`multilingual=True`,
-> `temperature=0`, `condition_on_previous_text=False` son nuevos en
-> `faster_engine`). Ver "PENDIENTE" al final.
+> **SESIÓN CERRADA.** Todo commiteado y **pusheado a `nas` y a `origin`**
+> (`feat/f3-f4-f6`), CI en verde en las tres plataformas. **Al retomar**, lo
+> primero es probar en Windows que los cambios de motor no rompen nada allí:
+> `temperature=0`, `condition_on_previous_text=False` y `multilingual=True` son
+> nuevos en `faster_engine` y **no los ha ejecutado nadie en esa plataforma**
+> (el CI compila, no transcribe). Ver "PENDIENTE" al final.
 
 **Entorno Mac nuevo:** se trabaja en la **copia local** `~/Mi Software/Trasnscriptor`
 (el NAS por SMB es lento: un `pip list` tardaba >2 min). Se recuperó el `.git`
@@ -217,6 +218,34 @@ Las anotaciones avisaban de Node.js 20 obsoleto. Subidas a `checkout@v7`,
 las tres plataformas (2m42s→3m11s en Windows) y **sin avisos de deprecación**.
 `action-gh-release@v3` NO se ha probado: ese paso solo corre con tags `v*`.
 
+### 12) Instaladores de Linux: AppImage, .deb y .rpm
+Linux solo salía como `tar.gz`, que obliga a descomprimir y a averiguar por tu
+cuenta que faltan libs de Qt (moría con errores crípticos sin `libxcb-cursor0`).
+Ahora el CI genera además, junto al tar.gz:
+
+| Formato | Tamaño | Para qué |
+|---|---|---|
+| `Transcriptor-0.2.0-x86_64.AppImage` | 131 MB | Un archivo, cualquier distro, sin instalar nada |
+| `transcriptor_0.2.0_amd64.deb` | 142 MB | Debian/Ubuntu: menú de escritorio + `apt` |
+| `transcriptor-0.2.0-1.x86_64.rpm` | 142 MB | Fedora/openSUSE |
+
+La lógica va en **`scripts/package_linux.sh`** (no inline en el YAML, para poder
+depurarla sin esperar al CI). `.deb` y `.rpm` con **fpm** desde el mismo árbol,
+evitando mantener un `control` y un `.spec` por separado; el AppImage con
+`appimagetool --appimage-extract-and-run` (los runners no traen FUSE y la
+herramienta es a su vez un AppImage). Se instala el paquete `rpm` en el runner:
+fpm necesita `rpmbuild` y no viene. El job de Linux pasa de ~1m48s a ~4m31s.
+
+Lo que aportan sobre el tar.gz: **declaran las libs de Qt como dependencias**
+(`libgl1`, `libegl1`, `libxkbcommon0`, `libxcb-cursor0`, `libfontconfig1`,
+`libdbus-1-3`, y sus equivalentes Red Hat).
+
+**El CI construye pero NO instala.** Sin verificar: que `apt install ./*.deb`
+resuelva, que el AppImage arranque solo con permisos de ejecución, y —lo más
+frágil— que los nombres del `.rpm` (`mesa-libGL`, `xcb-util-cursor`…) existan
+tal cual en Fedora. Si alguno no coincide, `dnf` rechaza la instalación aunque
+el paquete esté bien construido. Arreglo de una línea.
+
 ### Callejón sin salida documentado (no reintentar sin datos)
 Se probó exigir que el modelo wav2vec2 y el F0 **coincidieran** en el modo de
 género por frase (que tiene un **11% de etiquetas contradictorias** sobre el
@@ -227,18 +256,39 @@ aviso de cabecera es la protección real. Documentado en el docstring de
 `classify_ranges` y en `tests/test_gender_combine.py`.
 
 ### PENDIENTE
-- **Push a `nas` y a `origin`** (no hecho; decisión del Director).
-- **Probar en Windows**: `faster_engine` lleva ahora `temperature=0`,
-  `condition_on_previous_text=False` y `multilingual=True`. Sin verificar allí.
-- ~~Fallo de diarización se lleva el archivo entero~~ **ARREGLADO** (ver abajo).
-- **Género por frase: 11% de error irreducible.** Si el sexo importa en el
-  peritaje, usar el modo con separación de voces (acumula 60 s por hablante).
+
+**Lo primero al retomar, por orden de riesgo:**
+
+1. **Probar el motor en Windows.** `faster_engine` lleva ahora `temperature=0`,
+   `condition_on_previous_text=False` y `multilingual=True`. El CI compila, pero
+   **nadie los ha ejecutado en Windows**. Es lo único que puede haber roto la
+   plataforma principal del Director. Comprobar además que la diarización sigue
+   eligiendo CUDA en la 1070 Ti (hay tests que lo fijan, pero conviene verlo).
+2. **Modo AMD y provisión ROCm: sin hardware.** Todo el bloque 10/10-bis está
+   escrito y cubierto con mocks, pero **jamás se ha ejecutado en una Radeon**.
+   Validar en una AMD **reciente** (RDNA3/RX 7000+; la 6700 XT es RDNA2 y su
+   soporte está sin verificar por los propios autores del PR). Instalar
+   **ROCm 7.1.1**, no 6.x. Alternativa sin hardware: AMD Developer Cloud
+   (MI300X), que sirve como criba del código pero no valida RDNA2 ni Windows.
+3. **Instaladores Linux: se construyen, no se han instalado.** Probar
+   `apt install ./transcriptor_0.2.0_amd64.deb`, que el AppImage arranque, y
+   sobre todo el `.rpm`: los nombres de dependencia de la familia Red Hat se
+   pusieron por convención y no están comprobados contra Fedora.
+4. **`action-gh-release@v3` sin probar**: ese paso solo corre con tags `v*`. Se
+   sabrá en la próxima release.
+
+**Limitaciones conocidas, no son bugs:**
+- **Género por frase: ~11% de etiquetas contradictorias**, y es irreducible con
+  2-8 s de audio (ver el callejón sin salida). Si el sexo importa en el
+  peritaje, usar el modo con separación de voces, que acumula 60 s por hablante.
+  El informe ya lo advierte en su cabecera.
 - WA0002 conserva 2 tramos de idioma dudosos (`pt` 16-18 min, `is` 31-33,5 min)
   que aguantaron 2 ventanas. Se limpiarían subiendo la histéresis a 3 o
   restringiendo a un juego de idiomas plausibles.
 - Los 20 avisos de `ruff` 0.16 son **preexistentes** (el proyecto se escribió con
   ruff 0.6, que traía menos reglas por defecto). Los 8 errores de `mypy` son
   APIs solo-Windows y en Windows pasa limpio.
+- ~~Fallo de diarización se lleva el archivo entero~~ **ARREGLADO** (punto 9).
 
 ---
 
