@@ -4,7 +4,14 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
-## ✅ (2026-08-06, Mac) — Unificación en `main` y versión 0.9.0
+## ✅ CERRADA (2026-08-06/07, Mac) — Unificación en `main`, versión 0.9.0 y release publicada
+
+> **SESIÓN CERRADA.** Todo commiteado y pusheado; `main` en `a686178` en las tres
+> copias (Mac, `origin`, NAS), working trees limpios y CI en verde.
+> **Release v0.9.0 publicada** con los 6 instaladores.
+> **Al retomar:** ya **no existe `feat/f3-f4-f6`** — se trabaja en `main`. Lo
+> primero sigue siendo lo mismo que dejó la sesión anterior: **probar el motor en
+> Windows** (ver PENDIENTE al final de la entrada).
 
 Petición del Director: unificar todo el proyecto en `main` con la versión 0.9.
 
@@ -60,10 +67,33 @@ igual y **no hay que re-etiquetar**. Intento 2 en verde en las tres plataformas.
 Anotado por si vuelve a pasar: ante jobs `cancelled` con 0 pasos, mirar
 githubstatus.com antes de tocar nada del repo.
 
-**Se publica con las validaciones de la sesión anterior todavía abiertas**
-(motor sin ejecutar en Windows, modo AMD sin hardware, instaladores de Linux
-construidos pero nunca instalados). Están detalladas en el "PENDIENTE" de la
-entrada siguiente y siguen siendo lo primero al retomar.
+### PENDIENTE
+
+**0.9.0 se ha publicado con las validaciones de la sesión anterior todavía
+abiertas.** Siguen siendo lo primero al retomar, por orden de riesgo (el detalle
+técnico está en el "PENDIENTE" de la entrada siguiente):
+
+1. **Probar el motor en Windows.** `temperature=0`,
+   `condition_on_previous_text=False` y `multilingual=True` **nunca se han
+   ejecutado** en esa plataforma; el CI compila, no transcribe. Es lo único que
+   puede haber roto la plataforma principal del Director, y ahora ya está en
+   manos de quien descargue la release.
+2. **Antes de compilar en Windows: pasar la copia `D:` a `main`**
+   (`git checkout main` allí). Se quedó en `feat/f3-f4-f6`, que ya no existe en
+   ningún remoto.
+3. **Modo AMD / provisión ROCm: sin hardware.** Escrito y cubierto con mocks,
+   jamás ejecutado en una Radeon.
+4. **Instaladores de Linux: ahora sí se pueden probar de verdad.** Están
+   publicados en la release, así que la prueba es descargarlos e **instalarlos**
+   (`apt install ./transcriptor_0.9.0_amd64.deb`, arrancar el AppImage y —lo más
+   frágil— `dnf install` del `.rpm`, cuyos nombres de dependencia Red Hat se
+   pusieron por convención y siguen sin comprobar contra Fedora).
+5. ~~`action-gh-release@v3` sin probar~~ **CERRADO** en esta sesión.
+
+**Limitaciones conocidas** (no son bugs): siguen vigentes las de la entrada
+siguiente — ~11% de etiquetas de género contradictorias por frase, los 2 tramos
+de idioma dudosos de WA0002, y los avisos preexistentes de `ruff` (21 en `src`)
+y `mypy` (APIs solo-Windows).
 
 ---
 
