@@ -31,12 +31,34 @@ Petición del Director: unificar todo el proyecto en `main` con la versión 0.9.
   0.9.0. Los avisos de `ruff` (21 en `src`) siguen siendo los preexistentes de
   la sesión anterior, ninguno nuevo.
 
-**Release `v0.9.0` publicada** (decisión del Director): tag anotado sobre este
-commit y pusheado a `origin`, lo que dispara los tres jobs del CI y adjunta a la
-Release los 6 artefactos (`Transcriptor-Setup.exe`, DMG, tar.gz, AppImage, `.deb`
-y `.rpm`). Es la primera vez que se ejercita `softprops/action-gh-release@v3`
-—hasta ahora ese paso nunca había corrido—, y los tres jobs escriben sobre la
-misma Release en paralelo.
+### Release `v0.9.0` PUBLICADA
+https://github.com/letzzar/transcriptor/releases/tag/v0.9.0 (pública, no draft),
+con los **6 artefactos** subidos:
+
+| Artefacto | Tamaño |
+|---|---|
+| `Transcriptor-Setup.exe` | 89,9 MB |
+| `Transcriptor-macOS-arm64.dmg` | 101,4 MB |
+| `Transcriptor-linux-x86_64.tar.gz` | 141,2 MB |
+| `Transcriptor-0.9.0-x86_64.AppImage` | 130,4 MB |
+| `transcriptor_0.9.0_amd64.deb` | 141,1 MB |
+| `transcriptor-0.9.0-1.x86_64.rpm` | 141,2 MB |
+
+**`softprops/action-gh-release@v3` queda VALIDADO** (era el paso que nunca había
+corrido, punto 4 del PENDIENTE anterior): los tres jobs escribiendo en paralelo
+sobre la misma Release no se pisan — el primero la crea y los otros añaden sus
+ficheros. Ese pendiente se puede dar por cerrado.
+
+**Susto de por medio, que NO era nuestro:** el primer intento del run del tag
+salió en rojo con los tres jobs en `cancelled`. No fue un fallo de build —
+`runner_name` vacío y **0 pasos ejecutados**: nunca se les asignó runner. Había
+una **caída mayor de GitHub Actions** (incidencia abierta a las 15:22 UTC,
+*"queued jobs may time out"*) que se llevó por delante varios runs de la sesión.
+Al restablecerse el servicio bastó `gh run rerun 31124920862`: el reintento
+conserva el ref `refs/tags/v0.9.0`, así que el paso de publicación se dispara
+igual y **no hay que re-etiquetar**. Intento 2 en verde en las tres plataformas.
+Anotado por si vuelve a pasar: ante jobs `cancelled` con 0 pasos, mirar
+githubstatus.com antes de tocar nada del repo.
 
 **Se publica con las validaciones de la sesión anterior todavía abiertas**
 (motor sin ejecutar en Windows, modo AMD sin hardware, instaladores de Linux
