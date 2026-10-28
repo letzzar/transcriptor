@@ -62,3 +62,29 @@ def test_cada_modo_declara_lo_que_no_hace() -> None:
 
 def test_el_modo_completo_no_necesita_advertencia() -> None:
     assert "NO" not in AnalysisMode.SPEAKERS_GENDER.report_description
+
+
+def _descripcion_sin_diarizacion(modo: AnalysisMode) -> str:
+    from pathlib import Path
+
+    from transcriptor.workers.transcribe_worker import TranscribeWorker
+
+    worker = TranscribeWorker(
+        Path("."), model_id="tiny", max_speakers=None, enhance=False, language=None, mode=modo
+    )
+    return worker._describe_analysis(diarizado=False)
+
+
+def test_voces_sin_diarizacion_dice_que_va_sin_identificar() -> None:
+    descripcion = _descripcion_sin_diarizacion(AnalysisMode.SPEAKERS)
+    assert "NO fue posible" in descripcion
+    assert "sin identificar" in descripcion
+
+
+def test_voces_y_genero_sin_diarizacion_declara_el_genero_por_frase() -> None:
+    # Si falla la diarización, el worker etiqueta el género frase a frase: la
+    # cabecera no puede decir que el texto va "sin identificar".
+    descripcion = _descripcion_sin_diarizacion(AnalysisMode.SPEAKERS_GENDER)
+    assert "NO fue posible" in descripcion
+    assert "sin identificar" not in descripcion
+    assert "cada intervención por separado" in descripcion

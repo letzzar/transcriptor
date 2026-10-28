@@ -308,6 +308,15 @@ class TranscribeWorker(QThread):
         """
         descripcion = self._mode.report_description
         if self._mode.needs_diarization and not diarizado:
+            if self._mode.needs_gender:
+                # Sin diarización el worker cae al etiquetado de género por
+                # frase (`_label_by_gender`): la cabecera debe decirlo.
+                return (
+                    "Transcripción + género — se intentó separar los "
+                    "interlocutores y NO fue posible; se ha estimado el sexo "
+                    "probable de cada intervención por separado, así que dos "
+                    "frases del mismo sexo pueden ser personas distintas"
+                )
             return (
                 "Transcripción — se intentó separar los interlocutores y NO fue "
                 "posible, así que el texto va sin identificar"
