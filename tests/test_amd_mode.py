@@ -75,3 +75,45 @@ def test_make_engine_propaga_la_opcion(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(engines, "detect_engine", lambda: "faster-cpu")
     assert engines.make_engine("tiny", amd_gpu=True)._amd_gpu is True  # type: ignore[union-attr]
     assert engines.make_engine("tiny")._amd_gpu is False  # type: ignore[union-attr]
+
+
+def _finge_windows(monkeypatch: pytest.MonkeyPatch, respuestas: dict[str, object]) -> list[str]:
+    """Simula Windows: `respuestas[programa]` es su salida, o una excepción."""
+    import subprocess
+
+    llamados: list[str] = []
+
+    def run(cmd: list[str], **_kw: object) -> subprocess.CompletedProcess[str]:
+        llamados.append(cmd[0])
+        respuesta = respuestas[cmd[0]]
+        if isinstance(respuesta, Exception):
+            raise respuesta
+        return subprocess.CompletedProcess(cmd, 0, stdout=str(respuesta), stderr="")
+
+    monkeypatch.setattr(platform_info.sys, "platform", "win32")
+    monkeypatch.setattr(platform_info, "no_window_creationflags", lambda: 0)
+    monkeypatch.setattr(platform_info.subprocess, "run", run)
+    return llamados
+
+
+def test_windows_detecta_radeon_sin_wmic(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Windows 11 24H2 ya no trae wmic: debe bastar con PowerShell.
+    llamados = _finge_windows(
+        monkeypatch,
+        {"powershell": "AMD Radeon RX 6800\r\n", "wmic": FileNotFoundError("wmic")},
+    )
+    assert platform_info.has_amd_gpu() is True
+    assert llamados == ["powershell"]
+
+
+def test_windows_sin_powershell_recurre_a_wmic(monkeypatch: pytest.MonkeyPatch) -> None:
+    _finge_windows(
+        monkeypatch,
+        {"powershell": FileNotFoundError("powershell"), "wmic": "Name\r\nAMD Radeon RX 580\r\n"},
+    )
+    assert platform_info.has_amd_gpu() is True
+
+
+def test_windows_con_nvidia_no_ofrece_amd(monkeypatch: pytest.MonkeyPatch) -> None:
+    _finge_windows(monkeypatch, {"powershell": "NVIDIA GeForce GTX 1070 Ti\r\n", "wmic": ""})
+    assert platform_info.has_amd_gpu() is False

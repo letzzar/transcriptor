@@ -105,17 +105,7 @@ def has_amd_gpu() -> bool:
     if sys.platform == "darwin":
         return False  # ROCm no existe en macOS
     if is_windows():
-        try:
-            salida = subprocess.run(
-                ["wmic", "path", "win32_VideoController", "get", "name"],
-                capture_output=True,
-                text=True,
-                timeout=15,
-                creationflags=no_window_creationflags(),
-            ).stdout
-        except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
-            return False
-        return any(m in salida.lower() for m in ("amd", "radeon"))
+        return any(m in _windows_gpu_names().lower() for m in ("amd", "radeon"))
     # Linux: el identificador de fabricante PCI de AMD es 0x1002.
     try:
         from pathlib import Path as _Path
@@ -126,6 +116,37 @@ def has_amd_gpu() -> bool:
     except OSError:
         return False
     return False
+
+
+def _windows_gpu_names() -> str:
+    """Nombres de las tarjetas gráficas en Windows ("" si no se pueden leer).
+
+    Primero PowerShell (`Get-CimInstance`): `wmic` está obsoleto y Windows 11
+    24H2 ya no lo instala, así que con él solo el modo AMD no aparecía nunca.
+    `wmic` queda como respaldo para Windows antiguos sin ese cmdlet.
+    """
+    comandos = (
+        [
+            "powershell", "-NoProfile", "-NonInteractive", "-Command",
+            "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name",
+        ],
+        ["wmic", "path", "win32_VideoController", "get", "name"],
+    )
+    for cmd in comandos:
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=False,  # el código de salida se interpreta, no es un error
+                creationflags=no_window_creationflags(),
+            )
+        except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+            continue
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout
+    return ""
 
 
 def has_rocm_runtime() -> bool:
