@@ -91,12 +91,29 @@ def _selftest() -> int:
 def _ensure_ffmpeg() -> None:
     """Comprueba FFmpeg al arrancar; si falta, ofrece instalarlo con winget.
 
+    En macOS/Linux no hay winget: se indica el comando de instalación y se abre
+    la web oficial.
+
     Si el usuario acepta, instala `Gyan.FFmpeg` con winget (progreso modal). Si
     no quiere, o winget falla, abre la web oficial de FFmpeg.
     """
     from transcriptor.pipeline.audio import find_ffmpeg
 
     if find_ffmpeg() is not None:
+        return
+
+    # winget solo existe en Windows: en macOS/Linux indicamos cómo instalarlo.
+    if sys.platform != "win32":
+        hint = "brew install ffmpeg" if sys.platform == "darwin" else (
+            "el gestor de paquetes de tu distribución (p. ej. apt install ffmpeg)"
+        )
+        QMessageBox.information(
+            None,
+            "FFmpeg no encontrado",
+            "Transcriptor necesita FFmpeg para procesar el audio y no está "
+            f"instalado.\n\nInstálalo con {hint} y reinicia Transcriptor.",
+        )
+        QDesktopServices.openUrl(QUrl(ffmpeg_setup.FFMPEG_URL))
         return
 
     answer = QMessageBox.question(

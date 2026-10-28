@@ -44,7 +44,7 @@ _F0_MAX = 300.0
 # tramos en que la voz grave aflora tiran del p25 hacia abajo; una voz femenina nunca
 # baja tanto. Zonas "seguras" para corregir al modelo; en medio se respeta el modelo.
 _F0_MALE_MAX = 175.0  # p25 por debajo → casi seguro hombre
-_F0_FEMALE_MIN = 200.0  # p25 por encima → casi seguro mujer
+_F0_FEMALE_MIN = 200.0  # p25 por encima → mujer solo si el modelo coincide
 
 # Etiqueta cuando ninguna señal es concluyente (preferible a un acierto dudoso
 # en un peritaje legal).
@@ -183,8 +183,13 @@ def estimate_f0(samples: np.ndarray, sample_rate: int) -> float | None:
 def _combine(label: str, conf: float, f0: float | None) -> tuple[str, float]:
     """Decide el género combinando el modelo y el pitch (F0).
 
-    - F0 concluyente (≤175 Hz → hombre, ≥200 Hz → mujer): manda el F0, que es la
-      señal sin sesgo; corrige al modelo si lo contradice.
+    - F0 bajo (≤175 Hz): hombre, aunque el modelo diga otra cosa. Una voz de
+      mujer casi nunca baja tanto, y corrige el sesgo del modelo en audio
+      telefónico.
+    - F0 alto (≥200 Hz): NO basta para decir mujer. Un hombre que declama,
+      grita o habla en tensión sube a 200-300 Hz (medido: JFK, p25 = 212 Hz,
+      modelo "hombre" al 99,7%). Mujer solo si el modelo también lo dice; si el
+      modelo dice hombre, la contradicción da INDETERMINATE.
     - F0 indeciso (ausente, o en la banda de solape 175–200 Hz): se fía del
       modelo solo si va confiado (≥0.85); si no, devuelve INDETERMINATE para no
       arriesgar una etiqueta dudosa en un peritaje legal.
@@ -192,7 +197,9 @@ def _combine(label: str, conf: float, f0: float | None) -> tuple[str, float]:
     if f0 is not None and f0 <= _F0_MALE_MAX:
         return "hombre", max(conf, 0.75)
     if f0 is not None and f0 >= _F0_FEMALE_MIN:
-        return "mujer", max(conf, 0.75)
+        if label == "mujer":
+            return "mujer", max(conf, 0.75)
+        return INDETERMINATE, conf
     # F0 no decide: solo el modelo, y únicamente si va seguro.
     if conf >= _MODEL_CONF_TRUST:
         return label, conf

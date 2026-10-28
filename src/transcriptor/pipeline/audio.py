@@ -38,18 +38,33 @@ SUPPORTED_AUDIO_EXTENSIONS = frozenset(
 )
 
 
+# Rutas habituales de FFmpeg en macOS/Linux (Homebrew arm64 e Intel, MacPorts).
+# Una app abierta desde el Finder hereda un PATH mínimo (/usr/bin:/bin:...) que
+# no incluye estas carpetas, así que `shutil.which` no las ve por sí solo.
+_UNIX_FFMPEG_DIRS = ("/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin")
+
+
 class FfmpegError(RuntimeError):
     """FFmpeg no está disponible o falló al convertir el audio."""
 
 
 def find_ffmpeg() -> str | None:
-    """Localiza FFmpeg: primero en el PATH, luego junto al ejecutable.
+    """Localiza FFmpeg: PATH, rutas habituales de Unix y junto al ejecutable.
 
     Devuelve la ruta al binario o None si no se encuentra.
     """
     found = shutil.which("ffmpeg")
     if found:
         return found
+    if not is_windows():
+        found = shutil.which("ffmpeg", path=os.pathsep.join(_UNIX_FFMPEG_DIRS))
+        if found:
+            # mlx-whisper invoca "ffmpeg" por nombre al cargar el audio: su
+            # carpeta tiene que estar también en el PATH del proceso.
+            os.environ["PATH"] = os.pathsep.join(
+                [str(Path(found).parent), os.environ.get("PATH", "")]
+            )
+            return found
 
     name = "ffmpeg.exe" if is_windows() else "ffmpeg"
     # Junto al ejecutable (FFmpeg empaquetado en el instalador offline) y en el cwd.

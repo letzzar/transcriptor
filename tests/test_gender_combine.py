@@ -2,9 +2,11 @@
 
 Fija dos decisiones tomadas con mediciones, para que no se reviertan sin ellas:
 
-1. El F0 CORRIGE al modelo cuando es concluyente. wav2vec2 sesga a "mujer" en
-   audio telefónico (banda 300-3400 Hz, sin la fundamental masculina), y esta
-   corrección se validó en su día sobre grabaciones reales.
+1. Un F0 BAJO corrige al modelo. wav2vec2 sesga a "mujer" en audio
+   telefónico (banda 300-3400 Hz, sin la fundamental masculina), y esta
+   corrección se validó en su día sobre grabaciones reales. Un F0 ALTO, en
+   cambio, no basta para decir "mujer": un hombre declamando lo supera
+   (jfk.flac), así que si contradice al modelo el resultado es indeterminado.
 
 2. NO se exige que modelo y F0 coincidan. Se probó y se descartó con datos:
    la cobertura caía a la mitad (76 → 42 frases etiquetadas) y la tasa de
@@ -28,8 +30,22 @@ def test_el_pitch_corrige_al_modelo() -> None:
     assert etiqueta == "hombre"
 
 
-def test_el_pitch_tambien_corrige_en_sentido_contrario() -> None:
-    etiqueta, _ = _combine("hombre", 0.95, F0_MUJER)
+def test_pitch_alto_no_convierte_en_mujer_a_un_hombre_seguro() -> None:
+    # Medido en tests/fixtures/jfk.flac: un hombre declamando da p25 = 212 Hz
+    # y el modelo dice "hombre" al 99,7%. La contradicción no se resuelve a
+    # favor del pitch: un tono alto no es señal fuerte de mujer.
+    etiqueta, _ = _combine("hombre", 0.997, 212.0)
+    assert etiqueta == INDETERMINATE
+
+
+def test_pitch_alto_y_modelo_dudoso_no_se_moja() -> None:
+    # JFK en banda telefónica a 8 kHz: modelo "hombre" al 53%, p25 = 213 Hz.
+    etiqueta, _ = _combine("hombre", 0.53, 213.0)
+    assert etiqueta == INDETERMINATE
+
+
+def test_pitch_alto_confirma_al_modelo_que_dice_mujer() -> None:
+    etiqueta, _ = _combine("mujer", 0.6, F0_MUJER)
     assert etiqueta == "mujer"
 
 
