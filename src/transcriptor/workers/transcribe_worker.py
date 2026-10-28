@@ -138,6 +138,8 @@ class TranscribeWorker(QThread):
         # usuario. No se deduce del hardware: exige un CTranslate2 que no viene
         # de PyPI, así que activarlo solo si el usuario sabe lo que hace.
         self._amd_gpu = amd_gpu
+        # Nombres (sin extensión) que comparten varios audios: ver `shared_stems`.
+        self._shared_stems: set[str] = set()
 
     def _audio_files(self) -> list[Path]:
         return sorted(
@@ -155,6 +157,13 @@ class TranscribeWorker(QThread):
                 return
 
             self.log.emit(f"{len(files)} archivo(s) a procesar con modelo '{self._model_id}'.")
+            self._shared_stems = shared_stems(files)
+            if self._shared_stems:
+                self.log.emit(
+                    "AVISO: hay audios con el mismo nombre y distinta extensión; "
+                    "sus informes llevarán la extensión en el nombre "
+                    "(p. ej. audio_mp3_ANALIZADO.txt) para no sobrescribirse."
+                )
             engine = make_engine(self._model_id, amd_gpu=self._amd_gpu)
             diarizer = Diarizer() if self._mode.needs_diarization else None
             gender_clf = gender.GenderClassifier() if self._mode.needs_gender else None
@@ -280,7 +289,12 @@ class TranscribeWorker(QThread):
                 segments=labeled,
                 analysis=self._describe_analysis(turns is not None),
             )
-            out = txt.write_analysis(self._folder, f.name, content)
+            out = txt.write_analysis(
+                self._folder,
+                f.name,
+                content,
+                with_extension=f.stem.lower() in self._shared_stems,
+            )
             entries.append(
                 txt.SummaryEntry(
                     name=f.name,
@@ -357,6 +371,22 @@ class TranscribeWorker(QThread):
             )
             for s, etiqueta in zip(segments, etiquetas)
         ]
+
+
+def shared_stems(files: list[Path]) -> set[str]:
+    """Nombres sin extensión (en minúsculas) que comparten dos o más audios.
+
+    En minúsculas porque los sistemas de archivos de macOS y Windows no
+    distinguen mayúsculas: `A.mp3` y `a.wav` producirían el mismo informe.
+    """
+    vistos: set[str] = set()
+    repetidos: set[str] = set()
+    for f in files:
+        stem = f.stem.lower()
+        if stem in vistos:
+            repetidos.add(stem)
+        vistos.add(stem)
+    return repetidos
 
 
 def _gender_label(etiqueta: str | None) -> str:

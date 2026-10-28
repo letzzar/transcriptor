@@ -83,9 +83,25 @@ def render_summary(entries: list[SummaryEntry], *, now: datetime.datetime | None
     return "\n".join(lines)
 
 
-def write_analysis(folder: Path, source_name: str, content: str) -> Path:
+def analysis_filename(source_name: str, *, with_extension: bool = False) -> str:
+    """Nombre del informe de `source_name`: `a.mp3` → `a_ANALIZADO.txt`.
+
+    Con `with_extension` se incluye la extensión (`a_mp3_ANALIZADO.txt`). El
+    worker lo pide cuando dos audios de la carpeta comparten nombre (`a.mp3` y
+    `a.wav`): sin ello el segundo informe sobrescribiría al primero.
+    """
+    source = Path(source_name)
+    stem = source.stem
+    if with_extension:
+        stem += "_" + source.suffix.lstrip(".").lower()
+    return stem + ANALYSIS_SUFFIX
+
+
+def write_analysis(
+    folder: Path, source_name: str, content: str, *, with_extension: bool = False
+) -> Path:
     """Escribe el informe de un archivo en `folder` y devuelve su ruta."""
-    out = folder / (Path(source_name).stem + ANALYSIS_SUFFIX)
+    out = folder / analysis_filename(source_name, with_extension=with_extension)
     out.write_text(content, encoding="utf-8")
     return out
 
