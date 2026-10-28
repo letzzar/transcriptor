@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, QUrl
-from PySide6.QtGui import QAction, QDesktopServices, QKeySequence
+from PySide6.QtCore import QThread, QTimer, QUrl
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -96,6 +96,8 @@ class MainWindow(QMainWindow):
         self._folder: Path | None = config.get_last_folder()
         self._worker: TranscribeWorker | None = None
         self._unify_worker: UnifyWorker | None = None
+        # Cierre pedido con un trabajo en marcha: se cierra al terminar este.
+        self._close_when_done = False
 
         self._build_central()
         self._build_menu()
@@ -487,6 +489,9 @@ class MainWindow(QMainWindow):
         self._worker = None
         self._set_running(False)
         self.lbl_status.setText(f"Listo. {count} archivo(s) transcrito(s).")
+        if self._close_when_done:
+            self.close()
+            return
         QMessageBox.information(
             self, "Transcripción terminada", f"Se transcribieron {count} archivo(s)."
         )
@@ -495,7 +500,43 @@ class MainWindow(QMainWindow):
         self._worker = None
         self._set_running(False)
         self.lbl_status.setText("Error.")
+        if self._close_when_done:
+            self.close()
+            return
         QMessageBox.critical(self, "Error de transcripción", message)
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """No cierra con un trabajo en marcha: destruir un QThread vivo aborta la app.
+
+        Con una transcripción, pide confirmación y la cancela como el botón
+        Cancelar (termina el archivo actual y escribe el resumen de los ya
+        hechos); la ventana se cierra sola al acabar. El PDF es breve: se espera.
+        """
+        if self._worker is None and self._unify_worker is None:
+            # `finished_ok` se emite DESDE run(): el hilo puede seguir vivo un
+            # instante. Se espera a que acabe antes de destruirlo con la ventana.
+            for hilo in self.findChildren(QThread):
+                hilo.wait()
+            super().closeEvent(event)
+            return
+        event.ignore()
+        if self._close_when_done:
+            return  # ya se pidió; se cerrará al terminar
+        if self._worker is not None:
+            respuesta = QMessageBox.question(
+                self,
+                "Transcripción en curso",
+                "Hay una transcripción en marcha. ¿Cancelarla y salir?\n\n"
+                "Se termina el archivo actual y se guarda el resumen de los ya "
+                "procesados; después la aplicación se cerrará sola.",
+            )
+            if respuesta != QMessageBox.StandardButton.Yes:
+                return
+            self._worker.requestInterruption()
+            self.lbl_status.setText("Cancelando… la aplicación se cerrará al terminar el archivo actual.")
+        else:
+            self.lbl_status.setText("Terminando el PDF… la aplicación se cerrará después.")
+        self._close_when_done = True
 
     # ----------------------------------------------------------------- unificar
 
@@ -518,6 +559,9 @@ class MainWindow(QMainWindow):
         self._unify_worker = None
         self._set_running(False)
         self.lbl_status.setText(f"PDF generado: {Path(pdf_path).name}")
+        if self._close_when_done:
+            self.close()
+            return
         if self._folder:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._folder)))
         QMessageBox.information(
@@ -528,6 +572,9 @@ class MainWindow(QMainWindow):
         self._unify_worker = None
         self._set_running(False)
         self.lbl_status.setText("Error.")
+        if self._close_when_done:
+            self.close()
+            return
         QMessageBox.warning(self, "No se pudo unificar", message)
 
     # ----------------------------------------------------------------- diálogos
