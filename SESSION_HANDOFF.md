@@ -4,6 +4,57 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
+## ✅ CERRADA (2026-10-28, Mac) — Revisión a fondo, 6 fallos corregidos y versión 1.0.0
+
+> **Commits en `main` local, SIN push** (ni a `origin` ni a `nas`): de `37ab658`
+> a `42c2981` + esta entrada. **Sin tag ni release 1.0.0.** El `.app` 1.0.0 no
+> se ha compilado en local (no hay Python 3.13 en el Mac; el `.venv` es 3.12):
+> lo compila el CI al hacer push.
+
+Partió de un aviso real del Director: la app instalada (0.9.0, abierta desde el
+Finder) decía que faltaba FFmpeg y ofrecía **winget** en macOS.
+
+Corregido (un commit por fallo, todos con tests):
+1. **FFmpeg en macOS** (`37ab658`): una app abierta desde el Finder hereda
+   `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, sin `/opt/homebrew/bin`. `find_ffmpeg`
+   busca también en Homebrew/MacPorts y **añade la carpeta al PATH**, porque
+   `mlx-whisper` lanza `ffmpeg` por nombre (sin esto el aviso desaparecía pero
+   TODA transcripción fallaba). winget solo en Windows.
+2. **Género** (`37ab658`): un F0 alto ya no convierte en "mujer" a una voz que el
+   modelo da como hombre (jfk.flac: modelo hombre 99,7%, p25 = 212 Hz → salía
+   "mujer"). Decisión del Director: la contradicción da **indeterminado**. F0
+   bajo sigue corrigiendo al modelo (caso telefónico). Revalidado sobre los 3
+   audios WhatsApp de `~/Desktop/AUDIOS`: 6/6 hablantes iguales que con la regla
+   antigua. **`Y:\test` no se encontró** en los recursos montados del NAS
+   (`Software`, `Descargas`): la validación 3/3 original sigue sin repetirse.
+3. **Cabecera** (`dcc7266`): voces + género con diarización fallida declaraba
+   "sin identificar" aunque llevaba género por frase.
+4. **Cierre con trabajo en marcha** (`024b700`): abortaba (SIGABRT, sin
+   resumen). Ahora confirma, cancela tras el archivo actual y cierra sola.
+5. **Nombres repetidos** (`42573c1`): `a.mp3` + `a.wav` → mismo informe. Solo en
+   ese caso el informe lleva la extensión (`a_mp3_ANALIZADO.txt`).
+6. **PROCESADOS/** (`521fa0d`): unificar dos veces sobrescribía PDFs e informes
+   archivados (en Windows fallaba a medias). Ahora `<nombre>_2`, `_3`…
+7. **GPU AMD en Windows** (`4e39d62`): `wmic` ya no existe en Win11 24H2 →
+   PowerShell `Get-CimInstance`, wmic de respaldo. **Sin probar en Windows real.**
+
+Versión **1.0.0** (`42c2981`) en los 5 sitios de siempre.
+
+Verificado: 94 tests; ruff 20 avisos en `src` (todos previos); mypy solo los 8
+de APIs exclusivas de Windows; E2E de los 4 modos + 4 unificaciones seguidas con
+el PATH del Finder; cierre de ventana real (Sí/No) con salida 0.
+
+### PENDIENTE
+1. **Push** a `origin` y `nas`, y decidir **tag/release v1.0.0** (el tag dispara
+   la publicación de los 6 instaladores).
+2. Probar en **Windows**: motor (pendiente desde 0.9.0) y detección AMD nueva.
+3. Repetir la validación de género con `Y:\test` cuando se localice.
+4. Menores sin tocar: el combo de modelos no se refresca si se cierra el gestor
+   durante una descarga (y cerrar la app entonces espera a la descarga);
+   `_folder_seconds` lee todos los audios en el hilo de UI al cambiar de modo.
+
+---
+
 ## ✅ CERRADA (2026-08-06/07, Mac) — Unificación en `main`, versión 0.9.0 y release publicada
 
 > **SESIÓN CERRADA.** Todo commiteado y pusheado; `main` en `a686178` en las tres
