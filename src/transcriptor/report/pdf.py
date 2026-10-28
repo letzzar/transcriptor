@@ -99,13 +99,29 @@ def consolidate(folder: Path, *, archive: bool = True) -> Path:
         raise ReportError("No hay informes (_ANALIZADO.txt) que unificar en la carpeta.")
 
     stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
-    output = folder / f"CONSOLIDADO_{stamp}.pdf"
+    output = _free_path(folder / f"CONSOLIDADO_{stamp}.pdf")
     build_consolidated(analysis, summary, output)
 
     if archive:
         processed = folder / "PROCESADOS"
         processed.mkdir(exist_ok=True)
         for path in [*analysis, *([summary] if summary else [])]:
-            shutil.move(str(path), str(processed / path.name))
+            shutil.move(str(path), str(_free_path(processed / path.name)))
 
     return output
+
+
+def _free_path(path: Path) -> Path:
+    """`path` si no existe; si no, `<nombre>_2`, `<nombre>_3`… Nunca sobrescribe.
+
+    Unificar dos veces la misma carpeta (o dos veces en el mismo minuto) volvía
+    a usar los mismos nombres: en macOS/Linux se perdía en silencio el informe
+    archivado antes, y en Windows `shutil.move` fallaba con el PDF ya creado,
+    dejando el archivado a medias.
+    """
+    candidate = path
+    n = 2
+    while candidate.exists():
+        candidate = path.with_name(f"{path.stem}_{n}{path.suffix}")
+        n += 1
+    return candidate

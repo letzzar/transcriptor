@@ -50,6 +50,26 @@ def test_consolidate_sin_archivar(tmp_path: Path) -> None:
     assert not (tmp_path / "PROCESADOS").exists()
 
 
+def test_unificar_dos_veces_no_pierde_informes_archivados(tmp_path: Path) -> None:
+    # Dos rondas en la misma carpeta (y en el mismo minuto): mismos nombres.
+    _write_sample_reports(tmp_path)
+    primer_pdf = consolidate(tmp_path)
+    _write_sample_reports(tmp_path)
+    segundo_pdf = consolidate(tmp_path)
+
+    assert primer_pdf != segundo_pdf
+    assert primer_pdf.exists() and segundo_pdf.exists()
+    procesados = sorted(p.name for p in (tmp_path / "PROCESADOS").iterdir())
+    assert procesados == sorted(
+        [
+            f"audio1{ANALYSIS_SUFFIX}",
+            "audio1" + ANALYSIS_SUFFIX.replace(".txt", "_2.txt"),
+            SUMMARY_FILENAME,
+            SUMMARY_FILENAME.replace(".txt", "_2.txt"),
+        ]
+    )
+
+
 def test_consolidate_sin_informes_lanza(tmp_path: Path) -> None:
     with pytest.raises(ReportError):
         consolidate(tmp_path)
