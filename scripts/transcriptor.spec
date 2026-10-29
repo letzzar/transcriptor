@@ -46,6 +46,30 @@ for pkg in _keyring_pkgs:
     binaries += pkg_binaries
     hiddenimports += pkg_hidden
 
+# macOS/Linux: se congela la stdlib COMPLETA. El backend (torch, pyannote...)
+# importa modulos de la stdlib que nuestro codigo no usa, y en Windows los cubre
+# la stdlib del Python embebido (runtime.provision._add_embedded_stdlib). Aqui
+# ese fallback no basta, por dos motivos medidos en el .app:
+#   - python-build-standalone lleva los modulos C DENTRO de su binario (su
+#     lib-dynload esta casi vacio): torch._dynamo -> cProfile -> "No module
+#     named '_lsprof'".
+#   - un paquete que el bundle congelo A MEDIAS (p. ej. `http`) no busca sus
+#     submodulos en la stdlib embebida: requests -> "No module named
+#     'http.cookies'".
+# Cualquiera de los dos tumbaba la diarizacion siempre en el .app.
+if sys.platform != 'win32':
+    from PyInstaller.utils.hooks import collect_submodules
+
+    _NO_STDLIB = ('tkinter', '_tkinter', 'turtle', 'turtledemo', 'idlelib', 'test',
+                  'ensurepip', 'lib2to3', 'pydoc_data', 'this', 'antigravity')
+    for _mod in sorted(sys.stdlib_module_names):
+        if _mod in _NO_STDLIB or _mod.startswith(('_test', '_xx', 'xx', '_ctypes_test')):
+            continue
+        hiddenimports.append(_mod)
+        hiddenimports += collect_submodules(
+            _mod, filter=lambda name: not name.split('.')[-1].startswith('test')
+        )
+
 # El stack pesado se descarga aparte (Opcion C): lo excluimos para que
 # PyInstaller no lo arrastre por los imports perezosos de engines/ y pipeline/.
 # En runtime se importa desde el backend del usuario (sys.path lo anade
@@ -113,7 +137,7 @@ if sys.platform == 'darwin':
         icon=os.path.join(ROOT, 'src/transcriptor/resources/logo_app.icns'),
         bundle_identifier='com.letzzar.transcriptor',
         info_plist={
-            'CFBundleShortVersionString': '1.0.0',
+            'CFBundleShortVersionString': '1.0.1',
             'NSHighResolutionCapable': True,
         },
     )

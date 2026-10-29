@@ -7,7 +7,7 @@
 ; Salida:  dist\Transcriptor-Setup.exe
 
 #define AppName "Transcriptor"
-#define AppVersion "1.0.0"
+#define AppVersion "1.0.1"
 #define AppPublisher "letzzar"
 #define DistDir "..\dist\Transcriptor"
 

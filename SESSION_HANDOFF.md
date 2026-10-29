@@ -4,12 +4,42 @@ Bitácora de sesiones de desarrollo. La entrada más reciente arriba.
 
 ---
 
+## ✅ CERRADA (2026-10-29, Mac) — 1.0.1: ventanas duplicadas y diarización rota en el .app de Mac
+
+> Commit + push a `origin` y `nas`, tag `v1.0.1` (el CI publica los instaladores).
+> `.app` 1.0.1 compilado en local e instalado en `/Applications`.
+
+Aviso del Director: al cerrar la app o al transcribir se abría OTRA ventana.
+
+- **Ventanas duplicadas** (todas las versiones del bundle): tqdm arranca el
+  `resource_tracker` de `multiprocessing`, que se lanza con `sys.executable` =
+  la propia app. Faltaba `multiprocessing.freeze_support()` en `__main__.py`
+  (lo usa el rthook de PyInstaller para ejecutar el auxiliar y salir).
+  Reproducido sin el arreglo: relanzado en cadena (2066 procesos).
+- **Diarización SIEMPRE fallaba en el .app de Mac** (oculta por la degradación
+  elegante): faltaban `_lsprof` (python-build-standalone lleva los módulos C en
+  el binario) y `http.cookies` (paquete `http` congelado a medias). Arreglo en
+  `transcriptor.spec`: en macOS/Linux se congela la stdlib completa (sin
+  tkinter/tests). `--selftest` pasa de FAILED a OK; e2e del bundle con PATH del
+  Finder: 4 modos OK (diarización, género, PDF).
+- **Entorno de build local**: `venv/` (gitignored) con Python 3.13.18 (brew
+  python@3.13) + PyInstaller 6.22.3: `source venv/bin/activate && bash
+  scripts/build_unix.sh`. Los tests siguen en `.venv` (3.12): 94 OK.
+
+**PENDIENTE**
+- Probar la 1.0.1 en Windows (el cambio del spec no afecta a Windows;
+  `freeze_support` sí) y en Linux (stdlib completa sin probar en local).
+- Prueba manual con clics de la ventana real (sin permisos de captura aquí).
+- Validación de género con `Y:\test` (no encontrado).
+- Menores: combo de modelos no se refresca al cerrar el gestor a mitad de
+  descarga; `_folder_seconds` corre en el hilo de la UI.
+
+---
+
 ## ✅ CERRADA (2026-10-28, Mac) — Revisión a fondo, 6 fallos corregidos y versión 1.0.0
 
-> **Commits en `main` local, SIN push** (ni a `origin` ni a `nas`): de `37ab658`
-> a `42c2981` + esta entrada. **Sin tag ni release 1.0.0.** El `.app` 1.0.0 no
-> se ha compilado en local (no hay Python 3.13 en el Mac; el `.venv` es 3.12):
-> lo compila el CI al hacer push.
+> **Pusheado** a `origin` y `nas`, tag `v1.0.0` y release publicada (CI verde).
+> **La 1.0.0 de Mac tiene dos fallos graves**, corregidos en la 1.0.1 (entrada de arriba).
 
 Partió de un aviso real del Director: la app instalada (0.9.0, abierta desde el
 Finder) decía que faltaba FFmpeg y ofrecía **winget** en macOS.
